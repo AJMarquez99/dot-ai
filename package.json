@@ -1,0 +1,11 @@
+{
+  "name": "@ajmarquez99/dot-ai",
+  "version": "0.1.0",
+  "description": "A tiny, tool-agnostic convention for the context you give your coding agents.",
+  "bin": { "dot-ai": "bin/cli.js" },
+  "files": ["bin/", "template/", "agent-instructions.md", "SPEC.md", "LICENSE", "README.md"],
+  "license": "MIT",
+  "author": "Alejandro Marquez",
+  "repository": { "type": "git", "url": "https://github.com/AJMarquez99/dot-ai.git" },
+  "keywords": ["ai", "agents", "claude", "gemini", "codex", "context", "convention"]
+}
