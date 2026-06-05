@@ -22,7 +22,7 @@ else
   curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" \
     | tar xz -C "$SRC" --strip-components=1
 fi
-cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; }
+cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; return 0; }
 trap cleanup EXIT
 
 # Parse tool flags.
@@ -69,14 +69,16 @@ if [ "$ANY_FLAG" -eq 0 ]; then
 fi
 
 # 2) Inject the block into a single file (append, or replace existing block).
+# The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
+# values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
-  block=$(printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END")
+  bf=$(mktemp)
+  printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
-    # Replace existing marked block.
     tmp=$(mktemp)
-    awk -v b="$BEGIN" -v e="$END" -v repl="$block" '
-      $0==b {print repl; skip=1; next}
+    awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
+      $0==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
       $0==e {skip=0; next}
       skip!=1 {print}
     ' "$target" > "$tmp"
@@ -84,9 +86,10 @@ inject() {
     log "  updated block in: $target"
   else
     [ -f "$target" ] && printf '\n' >> "$target"
-    printf '%s\n' "$block" >> "$target"
+    cat "$bf" >> "$target"
     log "  appended block to: $target"
   fi
+  rm -f "$bf"
 }
 
 [ "$DO_CLAUDE" -eq 1 ] && inject "CLAUDE.md"
