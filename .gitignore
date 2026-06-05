@@ -1,8 +1,12 @@
 node_modules/
-# context/ holds regenerable session state — track folder + README, ignore contents
-.ai/context/*
-!.ai/context/.gitignore
-!.ai/context/README.md
+
+# Repo's own .ai/ dev workspace — kept private until reviewed for public sharing.
+# NOTE: the leading slash anchors this to the repo root, so the shipped
+# template/.ai/ scaffold below is NOT affected and remains tracked.
+/.ai/
+
+# In the shipped template, context/ holds regenerable session state —
+# track the folder + README, ignore the contents.
 template/.ai/context/*
 !template/.ai/context/.gitignore
 !template/.ai/context/README.md

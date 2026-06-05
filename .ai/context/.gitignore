@@ -1,4 +1,0 @@
-# context/ holds regenerable session state — track the folder + README, ignore the contents.
-*
-!.gitignore
-!README.md
