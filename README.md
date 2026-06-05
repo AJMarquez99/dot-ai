@@ -25,8 +25,14 @@ The installer:
 1. Drops a clean `.ai/` into your project (never overwriting existing files).
 2. Asks which agents you use and wires the convention into your `CLAUDE.md` / `GEMINI.md` /
    `AGENTS.md` — appending, never clobbering, and idempotent on re-run.
+3. Offers to point each selected tool's plan mode at `.ai/plans` via its local settings — Claude
+   (`.claude/settings.local.json` → `plansDirectory`) and Gemini (`.gemini/settings.json` →
+   `general.plan.directory`). Existing settings are merged, never overwritten (needs `jq`, `node`, or
+   `python3`). Codex has no equivalent setting, so it's skipped. Gemini also needs a `~/.gemini/policies`
+   rule to permit writes there — the installer prints a reminder rather than touching your global config.
 
 Non-interactive? Pass targets explicitly: `... | sh -s -- --all` (or `--claude --gemini --codex`).
+The plans setting defaults to on; add `--no-plans` to skip it.
 
 ## What you get
 

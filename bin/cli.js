@@ -43,6 +43,50 @@ function inject(target, block) {
 
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+// Set a (possibly nested, dot-delimited) key on an object, creating parents.
+function setDeep(obj, keyPath, value) {
+  const keys = keyPath.split('.');
+  let o = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (typeof o[keys[i]] !== 'object' || o[keys[i]] === null) o[keys[i]] = {};
+    o = o[keys[i]];
+  }
+  o[keys[keys.length - 1]] = value;
+}
+
+// Merge one key into a JSON settings file without clobbering existing keys.
+function mergeJsonSetting(file, keyPath, value) {
+  let data = {};
+  if (fs.existsSync(file)) {
+    const raw = fs.readFileSync(file, 'utf8').trim();
+    if (raw) {
+      try { data = JSON.parse(raw); }
+      catch { console.error(`  skip (invalid JSON): ${file}`); return; }
+    }
+  }
+  setDeep(data, keyPath, value);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+  console.error(`  set ${keyPath}=${value} in: ${file}`);
+}
+
+const PLANS_DIR = '.ai/plans';
+
+// Point each selected tool's plan-mode output at .ai/plans (local-scoped).
+function writePlansSetting(want) {
+  if (want.claude) {
+    mergeJsonSetting(path.join('.claude', 'settings.local.json'), 'plansDirectory', PLANS_DIR);
+  }
+  if (want.gemini) {
+    mergeJsonSetting(path.join('.gemini', 'settings.json'), 'general.plan.directory', PLANS_DIR);
+    console.error(`  note: Gemini also needs a policy allowing writes to ${PLANS_DIR} —`);
+    console.error('        add a rule under ~/.gemini/policies (not done automatically).');
+  }
+  if (want.codex) {
+    console.error('  note: Codex has no plans-directory setting; skipping.');
+  }
+}
+
 function ask(q) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((res) => rl.question(q, (a) => { rl.close(); res(a); }));
@@ -52,11 +96,13 @@ async function main() {
   const args = process.argv.slice(2);
   const want = { claude: false, gemini: false, codex: false };
   let anyFlag = false;
+  let noPlans = false;
   for (const a of args) {
     if (a === '--all') { want.claude = want.gemini = want.codex = true; anyFlag = true; }
     else if (a === '--claude') { want.claude = true; anyFlag = true; }
     else if (a === '--gemini') { want.gemini = true; anyFlag = true; }
     else if (a === '--codex') { want.codex = true; anyFlag = true; }
+    else if (a === '--no-plans') { noPlans = true; }
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
 
@@ -85,6 +131,18 @@ async function main() {
   if (want.claude) inject('CLAUDE.md', block);
   if (want.gemini) inject('GEMINI.md', block);
   if (want.codex) inject('AGENTS.md', block);
+
+  // Optionally point plan-mode output at .ai/plans for each selected tool.
+  let wantPlans;
+  if (noPlans) wantPlans = false;
+  else if (!anyFlag && process.stdin.isTTY) {
+    const a = await ask('\nAlso set plansDirectory to .ai/plans in local settings? [Y/n]: ');
+    wantPlans = !/^\s*n/i.test(a);
+  } else {
+    wantPlans = true; // default-yes for flagged / non-interactive runs (use --no-plans to skip)
+  }
+  if (wantPlans && (want.claude || want.gemini || want.codex)) writePlansSetting(want);
+
   console.error('Done.');
 }
 

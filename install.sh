@@ -27,13 +27,14 @@ cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; return 0; }
 trap cleanup EXIT
 
 # Parse tool flags.
-DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0
+DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0
 for arg in "$@"; do
   case "$arg" in
     --all) DO_CLAUDE=1; DO_GEMINI=1; DO_CODEX=1; ANY_FLAG=1 ;;
     --claude) DO_CLAUDE=1; ANY_FLAG=1 ;;
     --gemini) DO_GEMINI=1; ANY_FLAG=1 ;;
     --codex) DO_CODEX=1; ANY_FLAG=1 ;;
+    --no-plans) NO_PLANS=1 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
   esac
 done
@@ -69,6 +70,16 @@ if [ "$ANY_FLAG" -eq 0 ]; then
   fi
 fi
 
+# Decide whether to also point plan-mode output at .ai/plans (default yes).
+# Flagged / non-interactive runs default to yes; pass --no-plans to skip.
+WANT_PLANS=1
+[ "$NO_PLANS" -eq 1 ] && WANT_PLANS=0
+if [ "$NO_PLANS" -eq 0 ] && [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ]; then
+  printf 'Also set plansDirectory to .ai/plans in local settings? [Y/n]: ' >&2
+  read -r pans </dev/tty || pans=""
+  case "$pans" in [Nn]*) WANT_PLANS=0 ;; *) WANT_PLANS=1 ;; esac
+fi
+
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
@@ -96,5 +107,79 @@ inject() {
 [ "$DO_CLAUDE" -eq 1 ] && inject "CLAUDE.md"
 [ "$DO_GEMINI" -eq 1 ] && inject "GEMINI.md"
 [ "$DO_CODEX" -eq 1 ] && inject "AGENTS.md"
+
+# 3) Merge a single (possibly nested, dot-delimited) key into a JSON settings
+# file without clobbering existing keys. Needs jq, node, or python3; if none is
+# available we skip rather than risk corrupting the file with naive text edits.
+JSON_ENGINE=""
+if command -v jq >/dev/null 2>&1; then JSON_ENGINE=jq
+elif command -v node >/dev/null 2>&1; then JSON_ENGINE=node
+elif command -v python3 >/dev/null 2>&1; then JSON_ENGINE=python3
+fi
+
+merge_json() {
+  f="$1"; key="$2"; val="$3"
+  mkdir -p "$(dirname -- "$f")"
+  case "$JSON_ENGINE" in
+    jq)
+      [ -s "$f" ] || printf '{}\n' > "$f"
+      tmp=$(mktemp)
+      if jq --arg v "$val" ".$key = \$v" "$f" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$f"; log "  set $key=$val in: $f"
+      else
+        rm -f "$tmp"; log "  skip (invalid JSON): $f"
+      fi
+      ;;
+    node)
+      node - "$f" "$key" "$val" <<'NODE'
+const fs = require('fs');
+const [f, key, val] = process.argv.slice(2);
+let d = {};
+try { const r = fs.readFileSync(f, 'utf8').trim(); if (r) d = JSON.parse(r); }
+catch { console.error('  skip (invalid JSON): ' + f); process.exit(0); }
+let o = d; const ks = key.split('.');
+for (let i = 0; i < ks.length - 1; i++) {
+  if (typeof o[ks[i]] !== 'object' || o[ks[i]] === null) o[ks[i]] = {};
+  o = o[ks[i]];
+}
+o[ks[ks.length - 1]] = val;
+fs.writeFileSync(f, JSON.stringify(d, null, 2) + '\n');
+console.error('  set ' + key + '=' + val + ' in: ' + f);
+NODE
+      ;;
+    python3)
+      python3 - "$f" "$key" "$val" <<'PY'
+import json, sys
+f, key, val = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    s = open(f).read().strip()
+    d = json.loads(s) if s else {}
+except Exception:
+    sys.stderr.write('  skip (invalid JSON): %s\n' % f); sys.exit(0)
+o = d; ks = key.split('.')
+for k in ks[:-1]:
+    if not isinstance(o.get(k), dict): o[k] = {}
+    o = o[k]
+o[ks[-1]] = val
+open(f, 'w').write(json.dumps(d, indent=2) + '\n')
+sys.stderr.write('  set %s=%s in: %s\n' % (key, val, f))
+PY
+      ;;
+    *)
+      log "  skip plans setting ($f): need jq, node, or python3 to merge JSON safely."
+      ;;
+  esac
+}
+
+# 4) Point each selected tool's plan-mode output at .ai/plans (local-scoped).
+if [ "$WANT_PLANS" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ]; }; then
+  [ "$DO_CLAUDE" -eq 1 ] && merge_json ".claude/settings.local.json" "plansDirectory" ".ai/plans"
+  if [ "$DO_GEMINI" -eq 1 ]; then
+    merge_json ".gemini/settings.json" "general.plan.directory" ".ai/plans"
+    log "  note: Gemini also needs a policy allowing writes to .ai/plans —"
+    log "        add a rule under ~/.gemini/policies (not done automatically)."
+  fi
+  [ "$DO_CODEX" -eq 1 ] && log "  note: Codex has no plans-directory setting; skipping."
+fi
 
 log "Done."
