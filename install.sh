@@ -11,6 +11,7 @@ END="<!-- END .ai-convention -->"
 log() { printf '%s\n' "$*" >&2; }
 
 # Resolve source: local clone if template/ is adjacent, else download tarball.
+# shellcheck disable=SC1007  # 'CDPATH= cd' is the intentional idiom to neutralize CDPATH
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if [ -d "$SCRIPT_DIR/template/.ai" ] && [ -f "$SCRIPT_DIR/agent-instructions.md" ]; then
   SRC="$SCRIPT_DIR"
@@ -57,7 +58,7 @@ if [ "$ANY_FLAG" -eq 0 ]; then
     log "Wire the convention into which agent config files?"
     log "  [1] CLAUDE.md  [2] GEMINI.md  [3] AGENTS.md  [a] all  [n] none"
     printf 'Select (e.g. "1 3" or "a"): ' >&2
-    read ans </dev/tty || ans="n"
+    read -r ans </dev/tty || ans="n"
     case "$ans" in *a*|*A*) DO_CLAUDE=1; DO_GEMINI=1; DO_CODEX=1 ;; esac
     case "$ans" in *1*) DO_CLAUDE=1 ;; esac
     case "$ans" in *2*) DO_GEMINI=1 ;; esac

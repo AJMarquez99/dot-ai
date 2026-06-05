@@ -61,6 +61,9 @@ One test: **is the content regenerable?**
 - **Regenerable** (machine-derived session state) → **track the folder + a `README`, gitignore the
   contents.** This is `context/` only.
 - Additionally gitignore anything containing **sensitive data** (keys, credentials, drafts).
+- **Public repository?** If some `.ai/` content isn't meant for the world, gitignore the whole
+  directory or just the specific subdirectories that hold it (e.g. `plans/`, `notes/`). The
+  convention works the same whether or not `.ai/` is committed.
 
 ## Archive policy
 

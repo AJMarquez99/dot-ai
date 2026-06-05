@@ -66,6 +66,16 @@ Re-running the installer updates just that block — your other instructions are
 - **Legible.** A reviewer (human or agent) can tell at a glance where a fact belongs.
 - **Self-cleaning.** The notes → plan/knowledge/lesson → guideline lifecycle keeps it from rotting.
 
+## A note on privacy (and dogfooding)
+
+`dot-ai` was built using its own convention: this repo kept an `.ai/` workspace of design docs and
+plans throughout. Because the repo is public, that workspace is **gitignored** rather than committed —
+the convention shaped the work without putting it on display.
+
+If you adopt `.ai/` in a public repo and some of it isn't meant for the world, do the same: gitignore
+the whole `.ai/` directory, or just the subdirectories you want to keep private (e.g. `plans/`,
+`notes/`). It works the same either way.
+
 ## License
 
 [MIT](./LICENSE) © 2026 Alejandro Marquez

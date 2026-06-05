@@ -1,6 +1,7 @@
 #!/bin/sh
 # Verifies both installers: scaffold copy, non-clobber, block append + idempotent replace.
 set -eu
+# shellcheck disable=SC1007  # 'CDPATH= cd' is the intentional idiom to neutralize CDPATH
 REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'ok: %s\n' "$*"; }

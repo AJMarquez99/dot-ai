@@ -31,7 +31,9 @@ promote up, the rest is thrown away. Nothing is meant to sit still.
 Is the content regenerable? If a fresh clone could rebuild it from the code and git history, it's
 session state — track the folder, gitignore the contents (this is `context/` only). Everything else
 is human intent or derived truth: commit it. Transient does not mean untracked — `lessons/` and
-`notes/` are committed precisely so they survive a clone.
+`notes/` are committed precisely so they survive a clone. And if your repository is public, gitignore
+`.ai/` (or specific subdirectories) for anything not meant for the world — exactly as this repo keeps
+its own `.ai/` workspace private.
 
 ## Adopting it
 
