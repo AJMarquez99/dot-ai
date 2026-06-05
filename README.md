@@ -14,7 +14,9 @@ plain Markdown that **any** agent (Claude, Gemini, Codex, …) can read.
 ```sh
 # POSIX (macOS/Linux)
 curl -fsSL https://raw.githubusercontent.com/AJMarquez99/dot-ai/main/install.sh | sh
+```
 
+```sh
 # Node / cross-platform
 npx github:AJMarquez99/dot-ai
 ```
