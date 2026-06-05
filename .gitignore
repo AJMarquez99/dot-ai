@@ -1,0 +1,8 @@
+node_modules/
+# context/ holds regenerable session state — track folder + README, ignore contents
+.ai/context/*
+!.ai/context/.gitignore
+!.ai/context/README.md
+template/.ai/context/*
+!template/.ai/context/.gitignore
+!template/.ai/context/README.md
