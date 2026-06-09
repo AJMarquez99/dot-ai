@@ -90,6 +90,12 @@ if [ "$ANY_FLAG" -eq 0 ]; then
   fi
 fi
 
+# --global with no tool selected does nothing useful — tell the user.
+if [ "$GLOBAL" -eq 1 ] && [ "$DO_CLAUDE" -eq 0 ] && [ "$DO_GEMINI" -eq 0 ] && [ "$DO_CODEX" -eq 0 ]; then
+  log "Note: --global has no effect without a tool flag (--claude/--gemini/--codex/--all)."
+  log "Re-run with a tool flag to write to the global config."
+fi
+
 # Decide whether to also point plan-mode output at .ai/plans (default yes).
 # Flagged / non-interactive runs default to yes; pass --no-plans to skip.
 WANT_PLANS=1

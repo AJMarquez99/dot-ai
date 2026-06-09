@@ -57,6 +57,7 @@ plans_case() {
   cd /; rm -rf "$work"; work=$(mktemp -d); cd "$work"
   $runner --claude --no-plans
   [ -f .claude/settings.local.json ] && fail "$name: --no-plans still wrote settings"
+  grep -qF '<!-- BEGIN .ai-convention -->' CLAUDE.md || fail "$name: --no-plans suppressed MD injection"
 
   cd /; rm -rf "$work"
   pass "$name (plans)"
@@ -109,6 +110,19 @@ global_case() {
   pass "$name (global)"
 }
 
+# --global with no tool flag: scaffold only, no MD, prints a hint, exits 0.
+bare_global_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --global 2>&1)
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  [ -e CLAUDE.md ] && fail "$name: --global alone created CLAUDE.md"
+  printf '%s\n' "$out" | grep -qi 'no effect without a tool flag' \
+    || fail "$name: --global alone printed no hint"
+  cd /; rm -rf "$work"
+  pass "$name (bare-global)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
@@ -119,4 +133,6 @@ guard_case    "install.sh" "sh $REPO_ROOT/install.sh"
 guard_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
 global_case "install.sh" "sh $REPO_ROOT/install.sh"
 global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+bare_global_case "install.sh" "sh $REPO_ROOT/install.sh"
+bare_global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

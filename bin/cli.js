@@ -150,6 +150,12 @@ async function main() {
     }
   }
 
+  // --global with no tool selected does nothing useful — tell the user.
+  if (want.global && !want.claude && !want.gemini && !want.codex) {
+    console.error('Note: --global has no effect without a tool flag (--claude/--gemini/--codex/--all).');
+    console.error('Re-run with a tool flag to write to the global config.');
+  }
+
   const mdTarget = (file, subdir) => want.global ? path.join(homeDir(), subdir, file) : file;
 
   const instructions = fs.readFileSync(path.join(ROOT, 'agent-instructions.md'), 'utf8').trimEnd();
