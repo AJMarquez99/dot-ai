@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const os = require('os');
 
 const ROOT = path.join(__dirname, '..');
 const BEGIN = '<!-- BEGIN .ai-convention -->';
@@ -26,6 +27,7 @@ function copyTree(srcDir, destDir) {
 }
 
 function inject(target, block) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   if (fs.existsSync(target)) {
     const cur = fs.readFileSync(target, 'utf8');
     if (cur.includes(BEGIN)) {
@@ -42,6 +44,9 @@ function inject(target, block) {
 }
 
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows has no $HOME).
+function homeDir() { return process.env.HOME || os.homedir(); }
 
 // Set a (possibly nested, dot-delimited) key on an object, creating parents.
 function setDeep(obj, keyPath, value) {
@@ -141,11 +146,13 @@ async function main() {
     }
   }
 
+  const mdTarget = (file, subdir) => want.global ? path.join(homeDir(), subdir, file) : file;
+
   const instructions = fs.readFileSync(path.join(ROOT, 'agent-instructions.md'), 'utf8').trimEnd();
   const block = `${BEGIN}\n${instructions}\n${END}`;
-  if (want.claude) inject('CLAUDE.md', block);
-  if (want.gemini) inject('GEMINI.md', block);
-  if (want.codex) inject('AGENTS.md', block);
+  if (want.claude) inject(mdTarget('CLAUDE.md', '.claude'), block);
+  if (want.gemini) inject(mdTarget('GEMINI.md', '.gemini'), block);
+  if (want.codex)  inject(mdTarget('AGENTS.md', '.codex'), block);
 
   // Optionally point plan-mode output at .ai/plans for each selected tool.
   let wantPlans;

@@ -88,6 +88,27 @@ guard_case() {
   pass "$name (guard)"
 }
 
+# Global MD target: --global writes the block to $HOME config, not local; idempotent.
+global_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); fakehome=$(mktemp -d); cd "$work"
+  HOME="$fakehome" $runner --claude --global
+  [ -f "$fakehome/.claude/CLAUDE.md" ] || fail "$name: global CLAUDE.md not created"
+  grep -qF '<!-- BEGIN .ai-convention -->' "$fakehome/.claude/CLAUDE.md" \
+    || fail "$name: block not written to global CLAUDE.md"
+  [ -e CLAUDE.md ] && fail "$name: --global also created a local CLAUDE.md"
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  # Idempotent: second global run must not duplicate the block.
+  HOME="$fakehome" $runner --claude --global
+  count=$(grep -cF '<!-- BEGIN .ai-convention -->' "$fakehome/.claude/CLAUDE.md")
+  [ "$count" -eq 1 ] || fail "$name: global block duplicated ($count)"
+  # Plans setting must stay project-local (in $work), never in the global home.
+  [ -f "$work/.claude/settings.local.json" ] || fail "$name: plans setting not written to local work dir"
+  [ -e "$fakehome/.claude/settings.local.json" ] && fail "$name: --global wrote plans setting into fakehome"
+  cd /; rm -rf "$work" "$fakehome"
+  pass "$name (global)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
@@ -96,4 +117,6 @@ scaffold_case "install.sh" "sh $REPO_ROOT/install.sh"
 scaffold_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 guard_case    "install.sh" "sh $REPO_ROOT/install.sh"
 guard_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
+global_case "install.sh" "sh $REPO_ROOT/install.sh"
+global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

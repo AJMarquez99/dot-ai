@@ -95,11 +95,18 @@ if [ "$NO_PLANS" -eq 0 ] && [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ]; then
   case "$pans" in [Nn]*) WANT_PLANS=0 ;; *) WANT_PLANS=1 ;; esac
 fi
 
+# Resolve an MD target: project-local by default, or under $HOME when --global.
+# $1 = filename (CLAUDE.md), $2 = global subdir (.claude)
+md_target() {
+  if [ "$GLOBAL" -eq 1 ]; then printf '%s/%s/%s' "$HOME" "$2" "$1"; else printf '%s' "$1"; fi
+}
+
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
+  mkdir -p "$(dirname -- "$target")"
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
@@ -119,9 +126,9 @@ inject() {
   rm -f "$bf"
 }
 
-[ "$DO_CLAUDE" -eq 1 ] && inject "CLAUDE.md"
-[ "$DO_GEMINI" -eq 1 ] && inject "GEMINI.md"
-[ "$DO_CODEX" -eq 1 ] && inject "AGENTS.md"
+[ "$DO_CLAUDE" -eq 1 ] && inject "$(md_target CLAUDE.md .claude)"
+[ "$DO_GEMINI" -eq 1 ] && inject "$(md_target GEMINI.md .gemini)"
+[ "$DO_CODEX" -eq 1 ] && inject "$(md_target AGENTS.md .codex)"
 
 # 3) Merge a single (possibly nested, dot-delimited) key into a JSON settings
 # file without clobbering existing keys. Needs jq, node, or python3; if none is
