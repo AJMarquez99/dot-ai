@@ -140,6 +140,10 @@ async function main() {
       if (/1/.test(ans)) want.claude = true;
       if (/2/.test(ans)) want.gemini = true;
       if (/3/.test(ans)) want.codex = true;
+      if (want.claude || want.gemini || want.codex) {
+        const g = await ask('\nWrite to local or global config? [l] local  [g] global: ');
+        if (/^\s*g/i.test(g)) want.global = true;
+      }
     } else {
       console.error('No tty and no flags — skipping agent wiring.');
       console.error('Re-run with --claude / --gemini / --codex / --all to wire config files.');
@@ -157,7 +161,7 @@ async function main() {
   // Optionally point plan-mode output at .ai/plans for each selected tool.
   let wantPlans;
   if (noPlans) wantPlans = false;
-  else if (!anyFlag && process.stdin.isTTY) {
+  else if (!anyFlag && process.stdin.isTTY && (want.claude || want.gemini || want.codex)) {
     const a = await ask('\nAlso set plansDirectory to .ai/plans in local settings? [Y/n]: ');
     wantPlans = !/^\s*n/i.test(a);
   } else {

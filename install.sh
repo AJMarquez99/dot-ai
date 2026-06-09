@@ -79,6 +79,11 @@ if [ "$ANY_FLAG" -eq 0 ]; then
     case "$ans" in *1*) DO_CLAUDE=1 ;; esac
     case "$ans" in *2*) DO_GEMINI=1 ;; esac
     case "$ans" in *3*) DO_CODEX=1 ;; esac
+    if [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ]; then
+      printf 'Write to local or global config? [l] local  [g] global: ' >&2
+      read -r gans </dev/tty || gans="l"
+      case "$gans" in [Gg]*) GLOBAL=1 ;; esac
+    fi
   else
     log "No tty and no flags — skipping agent wiring."
     log "Re-run with --claude / --gemini / --codex / --all to wire config files."
@@ -88,11 +93,13 @@ fi
 # Decide whether to also point plan-mode output at .ai/plans (default yes).
 # Flagged / non-interactive runs default to yes; pass --no-plans to skip.
 WANT_PLANS=1
-[ "$NO_PLANS" -eq 1 ] && WANT_PLANS=0
-if [ "$NO_PLANS" -eq 0 ] && [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ]; then
+if [ "$NO_PLANS" -eq 1 ]; then
+  WANT_PLANS=0
+elif [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ] \
+     && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ]; }; then
   printf 'Also set plansDirectory to .ai/plans in local settings? [Y/n]: ' >&2
   read -r pans </dev/tty || pans=""
-  case "$pans" in [Nn]*) WANT_PLANS=0 ;; *) WANT_PLANS=1 ;; esac
+  case "$pans" in [Nn]*) WANT_PLANS=0 ;; esac
 fi
 
 # Resolve an MD target: project-local by default, or under $HOME when --global.
