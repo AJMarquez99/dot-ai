@@ -57,13 +57,82 @@ plans_case() {
   cd /; rm -rf "$work"; work=$(mktemp -d); cd "$work"
   $runner --claude --no-plans
   [ -f .claude/settings.local.json ] && fail "$name: --no-plans still wrote settings"
+  grep -qF '<!-- BEGIN .ai-convention -->' CLAUDE.md || fail "$name: --no-plans suppressed MD injection"
 
   cd /; rm -rf "$work"
   pass "$name (plans)"
+}
+
+# Scaffold-only: --no-md drops dirs+READMEs and touches nothing else.
+scaffold_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  $runner --no-md
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  [ "$(find .ai -type d | wc -l | tr -d ' ')" -ge 12 ] || fail "$name: missing folders"
+  [ -e CLAUDE.md ] && fail "$name: --no-md created CLAUDE.md"
+  [ -e .claude/settings.local.json ] && fail "$name: --no-md wrote settings"
+  [ -e .gemini/settings.json ] && fail "$name: --no-md wrote gemini settings"
+  cd /; rm -rf "$work"
+  pass "$name (scaffold-only)"
+}
+
+# Contradiction guard: --no-md with an MD target flag must exit non-zero.
+guard_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  if $runner --no-md --claude >/dev/null 2>&1; then
+    cd /; rm -rf "$work"
+    fail "$name: --no-md --claude should have exited non-zero"
+  fi
+  cd /; rm -rf "$work"
+  pass "$name (guard)"
+}
+
+# Global MD target: --global writes the block to $HOME config, not local; idempotent.
+global_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); fakehome=$(mktemp -d); cd "$work"
+  HOME="$fakehome" $runner --claude --global
+  [ -f "$fakehome/.claude/CLAUDE.md" ] || fail "$name: global CLAUDE.md not created"
+  grep -qF '<!-- BEGIN .ai-convention -->' "$fakehome/.claude/CLAUDE.md" \
+    || fail "$name: block not written to global CLAUDE.md"
+  [ -e CLAUDE.md ] && fail "$name: --global also created a local CLAUDE.md"
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  # Idempotent: second global run must not duplicate the block.
+  HOME="$fakehome" $runner --claude --global
+  count=$(grep -cF '<!-- BEGIN .ai-convention -->' "$fakehome/.claude/CLAUDE.md")
+  [ "$count" -eq 1 ] || fail "$name: global block duplicated ($count)"
+  # Plans setting must stay project-local (in $work), never in the global home.
+  [ -f "$work/.claude/settings.local.json" ] || fail "$name: plans setting not written to local work dir"
+  [ -e "$fakehome/.claude/settings.local.json" ] && fail "$name: --global wrote plans setting into fakehome"
+  cd /; rm -rf "$work" "$fakehome"
+  pass "$name (global)"
+}
+
+# --global with no tool flag: scaffold only, no MD, prints a hint, exits 0.
+bare_global_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --global 2>&1)
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  [ -e CLAUDE.md ] && fail "$name: --global alone created CLAUDE.md"
+  printf '%s\n' "$out" | grep -qi 'no effect without a tool flag' \
+    || fail "$name: --global alone printed no hint"
+  cd /; rm -rf "$work"
+  pass "$name (bare-global)"
 }
 
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
 plans_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+scaffold_case "install.sh" "sh $REPO_ROOT/install.sh"
+scaffold_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+guard_case    "install.sh" "sh $REPO_ROOT/install.sh"
+guard_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
+global_case "install.sh" "sh $REPO_ROOT/install.sh"
+global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+bare_global_case "install.sh" "sh $REPO_ROOT/install.sh"
+bare_global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

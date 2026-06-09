@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const os = require('os');
 
 const ROOT = path.join(__dirname, '..');
 const BEGIN = '<!-- BEGIN .ai-convention -->';
@@ -26,6 +27,7 @@ function copyTree(srcDir, destDir) {
 }
 
 function inject(target, block) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   if (fs.existsSync(target)) {
     const cur = fs.readFileSync(target, 'utf8');
     if (cur.includes(BEGIN)) {
@@ -42,6 +44,9 @@ function inject(target, block) {
 }
 
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows has no $HOME).
+function homeDir() { return process.env.HOME || os.homedir(); }
 
 // Set a (possibly nested, dot-delimited) key on an object, creating parents.
 function setDeep(obj, keyPath, value) {
@@ -94,20 +99,35 @@ function ask(q) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const want = { claude: false, gemini: false, codex: false };
+  const want = { claude: false, gemini: false, codex: false, global: false };
   let anyFlag = false;
   let noPlans = false;
+  let noMd = false;
   for (const a of args) {
     if (a === '--all') { want.claude = want.gemini = want.codex = true; anyFlag = true; }
     else if (a === '--claude') { want.claude = true; anyFlag = true; }
     else if (a === '--gemini') { want.gemini = true; anyFlag = true; }
     else if (a === '--codex') { want.codex = true; anyFlag = true; }
+    else if (a === '--global') { want.global = true; anyFlag = true; }
+    else if (a === '--no-md') { noMd = true; anyFlag = true; }
     else if (a === '--no-plans') { noPlans = true; }
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
 
+  // --no-md means "no MD work"; pairing it with MD targets is a user error.
+  if (noMd && (want.claude || want.gemini || want.codex || want.global)) {
+    console.error('Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global.');
+    process.exit(2);
+  }
+
   console.error('Installing .ai/ scaffold…');
   copyTree(path.join(ROOT, 'template', '.ai'), path.join(process.cwd(), '.ai'));
+
+  if (noMd) {
+    console.error('Scaffold only (--no-md) — skipping agent config and settings.');
+    console.error('Done.');
+    return;
+  }
 
   if (!anyFlag) {
     if (process.stdin.isTTY) {
@@ -120,22 +140,34 @@ async function main() {
       if (/1/.test(ans)) want.claude = true;
       if (/2/.test(ans)) want.gemini = true;
       if (/3/.test(ans)) want.codex = true;
+      if (want.claude || want.gemini || want.codex) {
+        const g = await ask('\nWrite to local or global config? [l] local  [g] global: ');
+        if (/^\s*g/i.test(g)) want.global = true;
+      }
     } else {
       console.error('No tty and no flags — skipping agent wiring.');
       console.error('Re-run with --claude / --gemini / --codex / --all to wire config files.');
     }
   }
 
+  // --global with no tool selected does nothing useful — tell the user.
+  if (want.global && !want.claude && !want.gemini && !want.codex) {
+    console.error('Note: --global has no effect without a tool flag (--claude/--gemini/--codex/--all).');
+    console.error('Re-run with a tool flag to write to the global config.');
+  }
+
+  const mdTarget = (file, subdir) => want.global ? path.join(homeDir(), subdir, file) : file;
+
   const instructions = fs.readFileSync(path.join(ROOT, 'agent-instructions.md'), 'utf8').trimEnd();
   const block = `${BEGIN}\n${instructions}\n${END}`;
-  if (want.claude) inject('CLAUDE.md', block);
-  if (want.gemini) inject('GEMINI.md', block);
-  if (want.codex) inject('AGENTS.md', block);
+  if (want.claude) inject(mdTarget('CLAUDE.md', '.claude'), block);
+  if (want.gemini) inject(mdTarget('GEMINI.md', '.gemini'), block);
+  if (want.codex)  inject(mdTarget('AGENTS.md', '.codex'), block);
 
   // Optionally point plan-mode output at .ai/plans for each selected tool.
   let wantPlans;
   if (noPlans) wantPlans = false;
-  else if (!anyFlag && process.stdin.isTTY) {
+  else if (!anyFlag && process.stdin.isTTY && (want.claude || want.gemini || want.codex)) {
     const a = await ask('\nAlso set plansDirectory to .ai/plans in local settings? [Y/n]: ');
     wantPlans = !/^\s*n/i.test(a);
   } else {

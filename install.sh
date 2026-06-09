@@ -27,17 +27,25 @@ cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; return 0; }
 trap cleanup EXIT
 
 # Parse tool flags.
-DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0
+DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0; GLOBAL=0; NO_MD=0
 for arg in "$@"; do
   case "$arg" in
     --all) DO_CLAUDE=1; DO_GEMINI=1; DO_CODEX=1; ANY_FLAG=1 ;;
     --claude) DO_CLAUDE=1; ANY_FLAG=1 ;;
     --gemini) DO_GEMINI=1; ANY_FLAG=1 ;;
     --codex) DO_CODEX=1; ANY_FLAG=1 ;;
+    --global) GLOBAL=1; ANY_FLAG=1 ;;
+    --no-md) NO_MD=1; ANY_FLAG=1 ;;
     --no-plans) NO_PLANS=1 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
   esac
 done
+
+# --no-md means "no MD work"; pairing it with MD targets is a user error.
+if [ "$NO_MD" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ] || [ "$GLOBAL" -eq 1 ]; }; then
+  log "Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global."
+  exit 2
+fi
 
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"
@@ -52,6 +60,13 @@ log "Installing .ai/ scaffold…"
   fi
 done
 
+# Scaffold-only: stop here, no MD or settings work.
+if [ "$NO_MD" -eq 1 ]; then
+  log "Scaffold only (--no-md) — skipping agent config and settings."
+  log "Done."
+  exit 0
+fi
+
 # Interactive selection if no flags and a tty is available.
 if [ "$ANY_FLAG" -eq 0 ]; then
   if [ -r /dev/tty ]; then
@@ -64,27 +79,47 @@ if [ "$ANY_FLAG" -eq 0 ]; then
     case "$ans" in *1*) DO_CLAUDE=1 ;; esac
     case "$ans" in *2*) DO_GEMINI=1 ;; esac
     case "$ans" in *3*) DO_CODEX=1 ;; esac
+    if [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ]; then
+      printf 'Write to local or global config? [l] local  [g] global: ' >&2
+      read -r gans </dev/tty || gans="l"
+      case "$gans" in [Gg]*) GLOBAL=1 ;; esac
+    fi
   else
     log "No tty and no flags — skipping agent wiring."
     log "Re-run with --claude / --gemini / --codex / --all to wire config files."
   fi
 fi
 
+# --global with no tool selected does nothing useful — tell the user.
+if [ "$GLOBAL" -eq 1 ] && [ "$DO_CLAUDE" -eq 0 ] && [ "$DO_GEMINI" -eq 0 ] && [ "$DO_CODEX" -eq 0 ]; then
+  log "Note: --global has no effect without a tool flag (--claude/--gemini/--codex/--all)."
+  log "Re-run with a tool flag to write to the global config."
+fi
+
 # Decide whether to also point plan-mode output at .ai/plans (default yes).
 # Flagged / non-interactive runs default to yes; pass --no-plans to skip.
 WANT_PLANS=1
-[ "$NO_PLANS" -eq 1 ] && WANT_PLANS=0
-if [ "$NO_PLANS" -eq 0 ] && [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ]; then
+if [ "$NO_PLANS" -eq 1 ]; then
+  WANT_PLANS=0
+elif [ "$ANY_FLAG" -eq 0 ] && [ -r /dev/tty ] \
+     && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ]; }; then
   printf 'Also set plansDirectory to .ai/plans in local settings? [Y/n]: ' >&2
   read -r pans </dev/tty || pans=""
-  case "$pans" in [Nn]*) WANT_PLANS=0 ;; *) WANT_PLANS=1 ;; esac
+  case "$pans" in [Nn]*) WANT_PLANS=0 ;; esac
 fi
+
+# Resolve an MD target: project-local by default, or under $HOME when --global.
+# $1 = filename (CLAUDE.md), $2 = global subdir (.claude)
+md_target() {
+  if [ "$GLOBAL" -eq 1 ]; then printf '%s/%s/%s' "$HOME" "$2" "$1"; else printf '%s' "$1"; fi
+}
 
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
+  mkdir -p "$(dirname -- "$target")"
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
@@ -104,9 +139,9 @@ inject() {
   rm -f "$bf"
 }
 
-[ "$DO_CLAUDE" -eq 1 ] && inject "CLAUDE.md"
-[ "$DO_GEMINI" -eq 1 ] && inject "GEMINI.md"
-[ "$DO_CODEX" -eq 1 ] && inject "AGENTS.md"
+[ "$DO_CLAUDE" -eq 1 ] && inject "$(md_target CLAUDE.md .claude)"
+[ "$DO_GEMINI" -eq 1 ] && inject "$(md_target GEMINI.md .gemini)"
+[ "$DO_CODEX" -eq 1 ] && inject "$(md_target AGENTS.md .codex)"
 
 # 3) Merge a single (possibly nested, dot-delimited) key into a JSON settings
 # file without clobbering existing keys. Needs jq, node, or python3; if none is
