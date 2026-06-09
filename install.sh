@@ -27,17 +27,25 @@ cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; return 0; }
 trap cleanup EXIT
 
 # Parse tool flags.
-DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0
+DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0; GLOBAL=0; NO_MD=0
 for arg in "$@"; do
   case "$arg" in
     --all) DO_CLAUDE=1; DO_GEMINI=1; DO_CODEX=1; ANY_FLAG=1 ;;
     --claude) DO_CLAUDE=1; ANY_FLAG=1 ;;
     --gemini) DO_GEMINI=1; ANY_FLAG=1 ;;
     --codex) DO_CODEX=1; ANY_FLAG=1 ;;
+    --global) GLOBAL=1; ANY_FLAG=1 ;;
+    --no-md) NO_MD=1; ANY_FLAG=1 ;;
     --no-plans) NO_PLANS=1 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
   esac
 done
+
+# --no-md means "no MD work"; pairing it with MD targets is a user error.
+if [ "$NO_MD" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [ "$DO_CODEX" -eq 1 ] || [ "$GLOBAL" -eq 1 ]; }; then
+  log "Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global."
+  exit 2
+fi
 
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"
@@ -51,6 +59,13 @@ log "Installing .ai/ scaffold…"
     log "  add: $rel"
   fi
 done
+
+# Scaffold-only: stop here, no MD or settings work.
+if [ "$NO_MD" -eq 1 ]; then
+  log "Scaffold only (--no-md) — skipping agent config and settings."
+  log "Done."
+  exit 0
+fi
 
 # Interactive selection if no flags and a tty is available.
 if [ "$ANY_FLAG" -eq 0 ]; then

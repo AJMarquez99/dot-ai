@@ -62,8 +62,38 @@ plans_case() {
   pass "$name (plans)"
 }
 
+# Scaffold-only: --no-md drops dirs+READMEs and touches nothing else.
+scaffold_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  $runner --no-md
+  [ -f .ai/README.md ] || fail "$name: scaffold not created"
+  [ "$(find .ai -type d | wc -l | tr -d ' ')" -ge 12 ] || fail "$name: missing folders"
+  [ -e CLAUDE.md ] && fail "$name: --no-md created CLAUDE.md"
+  [ -e .claude/settings.local.json ] && fail "$name: --no-md wrote settings"
+  [ -e .gemini/settings.json ] && fail "$name: --no-md wrote gemini settings"
+  cd /; rm -rf "$work"
+  pass "$name (scaffold-only)"
+}
+
+# Contradiction guard: --no-md with an MD target flag must exit non-zero.
+guard_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  if $runner --no-md --claude >/dev/null 2>&1; then
+    cd /; rm -rf "$work"
+    fail "$name: --no-md --claude should have exited non-zero"
+  fi
+  cd /; rm -rf "$work"
+  pass "$name (guard)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
 plans_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+scaffold_case "install.sh" "sh $REPO_ROOT/install.sh"
+scaffold_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+guard_case    "install.sh" "sh $REPO_ROOT/install.sh"
+guard_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

@@ -94,20 +94,35 @@ function ask(q) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const want = { claude: false, gemini: false, codex: false };
+  const want = { claude: false, gemini: false, codex: false, global: false };
   let anyFlag = false;
   let noPlans = false;
+  let noMd = false;
   for (const a of args) {
     if (a === '--all') { want.claude = want.gemini = want.codex = true; anyFlag = true; }
     else if (a === '--claude') { want.claude = true; anyFlag = true; }
     else if (a === '--gemini') { want.gemini = true; anyFlag = true; }
     else if (a === '--codex') { want.codex = true; anyFlag = true; }
+    else if (a === '--global') { want.global = true; anyFlag = true; }
+    else if (a === '--no-md') { noMd = true; anyFlag = true; }
     else if (a === '--no-plans') { noPlans = true; }
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
 
+  // --no-md means "no MD work"; pairing it with MD targets is a user error.
+  if (noMd && (want.claude || want.gemini || want.codex || want.global)) {
+    console.error('Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global.');
+    process.exit(2);
+  }
+
   console.error('Installing .ai/ scaffold…');
   copyTree(path.join(ROOT, 'template', '.ai'), path.join(process.cwd(), '.ai'));
+
+  if (noMd) {
+    console.error('Scaffold only (--no-md) — skipping agent config and settings.');
+    console.error('Done.');
+    return;
+  }
 
   if (!anyFlag) {
     if (process.stdin.isTTY) {
