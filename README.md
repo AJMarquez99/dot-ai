@@ -52,6 +52,9 @@ Non-interactive? Pass targets explicitly: `... | sh -s -- --all` (or `--claude -
 add `--global` to target user-level config. The plans setting defaults to on; add `--no-plans` to
 skip it.
 
+Run `dot-ai --help` for all flags, `--version` for the version, and `--dry-run` to preview the
+changes without writing anything.
+
 ## What you get
 
 ```
