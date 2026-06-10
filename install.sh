@@ -89,15 +89,21 @@ fi
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"
 ( cd "$SRC/template" && find .ai -type f -print ) | while IFS= read -r rel; do
-  dest="./$rel"
+  # npm renames any shipped `.gitignore` to `.npmignore` on install, so the
+  # template ships ignore files as `gitignore` (no dot); restore the dot here.
+  case "$rel" in
+    gitignore|*/gitignore) dest="./$(dirname -- "$rel")/.gitignore" ;;
+    *) dest="./$rel" ;;
+  esac
+  disp="${dest#./}"
   if [ -e "$dest" ]; then
-    log "  skip (exists): $rel"
+    log "  skip (exists): $disp"
   elif [ "$DRY" -eq 1 ]; then
-    log "  would add: $rel"
+    log "  would add: $disp"
   else
     mkdir -p "$(dirname -- "$dest")"
     cp "$SRC/template/$rel" "$dest"
-    log "  add: $rel"
+    log "  add: $disp"
   fi
 done
 
