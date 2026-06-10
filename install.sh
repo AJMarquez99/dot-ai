@@ -10,6 +10,34 @@ END="<!-- END .ai-convention -->"
 
 log() { printf '%s\n' "$*" >&2; }
 
+usage() {
+  cat <<'EOF'
+Usage: dot-ai [options]
+  Install the .ai/ convention scaffold and optionally wire it into agent config.
+
+Tool targets:
+  --claude       Wire CLAUDE.md
+  --gemini       Wire GEMINI.md
+  --codex        Wire AGENTS.md
+  --all          All of the above
+
+Options:
+  --global       Write the convention block to user-level config (~/.claude, ~/.gemini, ~/.codex)
+  --no-md        Scaffold only: create .ai/ + READMEs, no MD or settings
+  --no-plans     Don't set plansDirectory to .ai/plans
+  --dry-run      Preview all changes without writing anything
+  -h, --help     Show this help and exit
+  -V, --version  Show version and exit
+
+With no tool target and a TTY, you'll be prompted interactively.
+EOF
+}
+
+# Handle --help before source resolution so it never triggers a download.
+for arg in "$@"; do
+  case "$arg" in -h|--help) usage; exit 0 ;; esac
+done
+
 # Resolve source: local clone if template/ is adjacent, else download tarball.
 # shellcheck disable=SC1007  # 'CDPATH= cd' is the intentional idiom to neutralize CDPATH
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -26,6 +54,12 @@ fi
 cleanup() { [ -n "$CLEANUP" ] && rm -rf "$CLEANUP"; return 0; }
 trap cleanup EXIT
 
+# Handle --version now that SRC (and its package.json) is resolved.
+VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SRC/package.json" | head -1)
+for arg in "$@"; do
+  case "$arg" in -V|--version) printf '%s\n' "$VERSION"; exit 0 ;; esac
+done
+
 # Parse tool flags.
 DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0; GLOBAL=0; NO_MD=0
 for arg in "$@"; do
@@ -37,6 +71,8 @@ for arg in "$@"; do
     --global) GLOBAL=1; ANY_FLAG=1 ;;
     --no-md) NO_MD=1; ANY_FLAG=1 ;;
     --no-plans) NO_PLANS=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -V|--version) printf '%s\n' "$VERSION"; exit 0 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
   esac
 done

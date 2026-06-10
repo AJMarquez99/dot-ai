@@ -123,6 +123,30 @@ bare_global_case() {
   pass "$name (bare-global)"
 }
 
+# --help prints usage to stdout and exits 0; --version prints the package version.
+help_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --help) || fail "$name: --help exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'Usage: dot-ai' || fail "$name: --help missing usage"
+  printf '%s\n' "$out" | grep -qF -- '--dry-run' || fail "$name: --help missing flags"
+  [ -e .ai ] && fail "$name: --help created files"
+  cd /; rm -rf "$work"
+  pass "$name (help)"
+}
+
+version_case() {
+  name="$1"; shift; runner="$1"; shift
+  want=$(node -e 'process.stdout.write(require("'"$REPO_ROOT"'/package.json").version)') \
+    || fail "$name: could not read version from package.json"
+  work=$(mktemp -d); cd "$work"
+  got=$($runner --version) || fail "$name: --version exited non-zero"
+  [ "$got" = "$want" ] || fail "$name: --version got '$got' want '$want'"
+  [ -e .ai ] && fail "$name: --version created files"
+  cd /; rm -rf "$work"
+  pass "$name (version)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
@@ -135,4 +159,8 @@ global_case "install.sh" "sh $REPO_ROOT/install.sh"
 global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 bare_global_case "install.sh" "sh $REPO_ROOT/install.sh"
 bare_global_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+help_case    "install.sh" "sh $REPO_ROOT/install.sh"
+help_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
+version_case "install.sh" "sh $REPO_ROOT/install.sh"
+version_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

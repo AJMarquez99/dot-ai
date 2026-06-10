@@ -4,6 +4,28 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const os = require('os');
+const pkg = require('../package.json');
+
+function usage() {
+  console.log(`Usage: dot-ai [options]
+  Install the .ai/ convention scaffold and optionally wire it into agent config.
+
+Tool targets:
+  --claude       Wire CLAUDE.md
+  --gemini       Wire GEMINI.md
+  --codex        Wire AGENTS.md
+  --all          All of the above
+
+Options:
+  --global       Write the convention block to user-level config (~/.claude, ~/.gemini, ~/.codex)
+  --no-md        Scaffold only: create .ai/ + READMEs, no MD or settings
+  --no-plans     Don't set plansDirectory to .ai/plans
+  --dry-run      Preview all changes without writing anything
+  -h, --help     Show this help and exit
+  -V, --version  Show version and exit
+
+With no tool target and a TTY, you'll be prompted interactively.`);
+}
 
 const ROOT = path.join(__dirname, '..');
 const BEGIN = '<!-- BEGIN .ai-convention -->';
@@ -103,6 +125,8 @@ async function main() {
   let anyFlag = false;
   let noPlans = false;
   let noMd = false;
+  if (args.includes('-h') || args.includes('--help')) { usage(); return; }
+  if (args.includes('-V') || args.includes('--version')) { console.log(pkg.version); return; }
   for (const a of args) {
     if (a === '--all') { want.claude = want.gemini = want.codex = true; anyFlag = true; }
     else if (a === '--claude') { want.claude = true; anyFlag = true; }
@@ -111,6 +135,7 @@ async function main() {
     else if (a === '--global') { want.global = true; anyFlag = true; }
     else if (a === '--no-md') { noMd = true; anyFlag = true; }
     else if (a === '--no-plans') { noPlans = true; }
+    else if (a === '-h' || a === '--help' || a === '-V' || a === '--version') { /* handled above */ }
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
 
