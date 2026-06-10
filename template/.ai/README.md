@@ -36,6 +36,10 @@ One test: **is the content regenerable?**
 - **Regenerable** (machine-derived session state) → track the folder + `README`, gitignore the
   contents. This is `context/` only.
 - Also gitignore anything with **sensitive data** (keys, credentials, drafts) regardless of folder.
+- **Local-only files:** anything whose name starts with `_` is gitignored by this folder's
+  `.gitignore` — keep personal notes, secrets, or drafts local (e.g. `knowledge/_secrets.md`, or a
+  whole `_scratch/` dir) even when `.ai/` is committed to a public repo. Don't prefix a file you
+  intend to share.
 
 ## Archive policy
 

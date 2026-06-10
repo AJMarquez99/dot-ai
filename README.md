@@ -77,6 +77,10 @@ Each folder answers a distinct question — that's the whole trick. Full semanti
 version-control rules are in **[SPEC.md](./SPEC.md)**; the exact text your agent reads is
 **[agent-instructions.md](./agent-instructions.md)**.
 
+**Sharing `.ai/` in a public repo?** Commit the scaffold and the files worth sharing; prefix anything
+personal with `_` (e.g. `knowledge/_secrets.md`, or a whole `_scratch/` dir) and the shipped
+`.ai/.gitignore` keeps it on your machine.
+
 ## How it wires into your agent
 
 The installer appends a marked block to your agent's config file:

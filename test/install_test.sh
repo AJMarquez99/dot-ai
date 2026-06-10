@@ -20,6 +20,8 @@ run_case() {
   $runner --claude
   [ -f .ai/README.md ] || fail "$name: .ai/README.md not created"
   [ "$(find .ai -type d | wc -l | tr -d ' ')" -ge 12 ] || fail "$name: missing folders"
+  [ -f .ai/.gitignore ] || fail "$name: .ai/.gitignore not created"
+  grep -qF '_*' .ai/.gitignore || fail "$name: .ai/.gitignore missing _* local-prefix rule"
   grep -qF 'KEEP-ME' CLAUDE.md || fail "$name: clobbered existing content"
   grep -qF '<!-- BEGIN .ai-convention -->' CLAUDE.md || fail "$name: block not appended"
 
