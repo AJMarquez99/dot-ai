@@ -1,0 +1,9 @@
+# Local-only files. Anything whose name starts with `_` stays on your machine —
+# never committed, even when .ai/ itself is shared in a public repo. Use it for
+# personal notes, secrets, or work-in-progress.
+#   .ai/knowledge/_secrets.md   ->  ignored
+#   .ai/_scratch/               ->  ignored (whole dir)
+_*
+
+# Keep this file itself tracked/shipped (npm strips .gitignore files by default).
+!.gitignore

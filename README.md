@@ -52,6 +52,9 @@ Non-interactive? Pass targets explicitly: `... | sh -s -- --all` (or `--claude -
 add `--global` to target user-level config. The plans setting defaults to on; add `--no-plans` to
 skip it.
 
+Run `dot-ai --help` for all flags, `--version` for the version, and `--dry-run` to preview the
+changes without writing anything.
+
 ## What you get
 
 ```
@@ -73,6 +76,10 @@ skip it.
 Each folder answers a distinct question — that's the whole trick. Full semantics, lifecycle, and
 version-control rules are in **[SPEC.md](./SPEC.md)**; the exact text your agent reads is
 **[agent-instructions.md](./agent-instructions.md)**.
+
+**Sharing `.ai/` in a public repo?** Commit the scaffold and the files worth sharing; prefix anything
+personal with `_` (e.g. `knowledge/_secrets.md`, or a whole `_scratch/` dir) and the shipped
+`.ai/.gitignore` keeps it on your machine.
 
 ## How it wires into your agent
 

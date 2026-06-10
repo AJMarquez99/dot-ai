@@ -35,6 +35,11 @@ is human intent or derived truth: commit it. Transient does not mean untracked �
 `.ai/` (or specific subdirectories) for anything not meant for the world — exactly as this repo keeps
 its own `.ai/` workspace private.
 
+For finer control in a public repo, the shipped `.ai/.gitignore` ignores any file or directory whose
+name starts with `_`. Commit the scaffold and the files worth sharing, and prefix personal notes,
+secrets, or drafts with `_` (e.g. `knowledge/_secrets.md`, or a whole `_scratch/` dir) to keep them
+local. Don't prefix a file you mean to share.
+
 ## Adopting it
 
 - **One command:** see the [README](./README.md) quickstart — the installer drops `.ai/` into your

@@ -64,6 +64,10 @@ One test: **is the content regenerable?**
 - **Public repository?** If some `.ai/` content isn't meant for the world, gitignore the whole
   directory or just the specific subdirectories that hold it (e.g. `plans/`, `notes/`). The
   convention works the same whether or not `.ai/` is committed.
+- **Keep individual files local.** Anything whose name starts with `_` is gitignored by the shipped
+  `.ai/.gitignore` — so you can commit the scaffold and shared files in a public repo while keeping
+  personal notes, secrets, or drafts on your machine (e.g. `knowledge/_secrets.md`, or a whole
+  `_scratch/` dir). Don't prefix a file you intend to share.
 
 ## Archive policy
 

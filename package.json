@@ -6,6 +6,11 @@
   "files": ["bin/", "template/", "agent-instructions.md", "SPEC.md", "LICENSE", "README.md"],
   "license": "MIT",
   "author": "Alejandro Marquez",
+  "engines": { "node": ">=14" },
+  "scripts": {
+    "test": "sh test/install_test.sh",
+    "prepublishOnly": "npm test"
+  },
   "repository": { "type": "git", "url": "https://github.com/AJMarquez99/dot-ai.git" },
   "keywords": ["ai", "agents", "claude", "gemini", "codex", "context", "convention"]
 }
