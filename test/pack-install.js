@@ -18,8 +18,9 @@ function sh(cmd, args, opts) {
 
 const packName = sh('npm', ['pack', '--silent'], { cwd: ROOT }).trim().split('\n').pop().trim();
 const tgz = path.join(ROOT, packName);
+let proj;
 try {
-  const proj = tmp();
+  proj = tmp();
   sh('npm', ['init', '-y'], { cwd: proj });
   sh('npm', ['install', tgz], { cwd: proj });
   const pkgDir = path.join(proj, 'node_modules', '@ajmarquez99', 'dot-ai');
@@ -35,6 +36,7 @@ try {
   ck('no .ai/.npmignore in project', !fs.existsSync(path.join(proj, '.ai', '.npmignore')));
 } finally {
   try { fs.unlinkSync(tgz); } catch (e) { /* ignore */ }
+  try { if (proj) fs.rmSync(proj, { recursive: true, force: true }); } catch (e) { /* ignore */ }
 }
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nPACK-INSTALL OK');
 process.exit(fails ? 1 : 0);

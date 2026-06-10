@@ -92,7 +92,7 @@ log "Installing .ai/ scaffold…"
   # npm renames any shipped `.gitignore` to `.npmignore` on install, so the
   # template ships ignore files as `gitignore` (no dot); restore the dot here.
   case "$rel" in
-    gitignore|*/gitignore) dest="./$(dirname -- "$rel")/.gitignore" ;;
+    */gitignore) dest="./$(dirname -- "$rel")/.gitignore" ;;
     *) dest="./$rel" ;;
   esac
   disp="${dest#./}"
