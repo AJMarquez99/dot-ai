@@ -1,9 +1,8 @@
 node_modules/
 
-# Repo's own .ai/ dev workspace — kept private until reviewed for public sharing.
-# NOTE: the leading slash anchors this to the repo root, so the shipped
-# template/.ai/ scaffold below is NOT affected and remains tracked.
-/.ai/
+# This repo dogfoods the convention: its own .ai/ is committed (curated knowledge,
+# guidelines, runbooks) and governed by .ai/.gitignore — personal/in-flight files
+# use the `_` prefix to stay local, and .ai/context/ ignores its own contents.
 
 # In the shipped template, context/ holds regenerable session state —
 # track the folder + README, ignore the contents.

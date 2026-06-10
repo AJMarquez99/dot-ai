@@ -80,9 +80,9 @@ Each folder answers a distinct question — that's the whole trick. Full semanti
 version-control rules are in **[SPEC.md](./SPEC.md)**; the exact text your agent reads is
 **[agent-instructions.md](./agent-instructions.md)**.
 
-**Sharing `.ai/` in a public repo?** Commit the scaffold and the files worth sharing; prefix anything
-personal with `_` (e.g. `knowledge/_secrets.md`, or a whole `_scratch/` dir) and the shipped
-`.ai/.gitignore` keeps it on your machine.
+**Sharing `.ai/` in a public repo?** Commit the scaffold and the files worth sharing; keep personal
+files local by prefixing them with `_` (the shipped `.ai/.gitignore` ignores `_*`). This repo's own
+[`.ai/`](./.ai) is committed exactly this way — browse it as a worked example.
 
 ## How it wires into your agent
 
@@ -104,13 +104,17 @@ Re-running the installer updates just that block — your other instructions are
 
 ## A note on privacy (and dogfooding)
 
-`dot-ai` was built using its own convention: this repo kept an `.ai/` workspace of design docs and
-plans throughout. Because the repo is public, that workspace is **gitignored** rather than committed —
-the convention shaped the work without putting it on display.
+`dot-ai` dogfoods its own convention: this repo's [`.ai/`](./.ai) is committed — curated
+`knowledge/`, `guidelines/`, and `runbooks/` that a contributor (or their agent) can read — while
+personal and in-flight files (design scratch, working notes) stay local via the `_` prefix, and
+`context/` ignores its own contents. It's the convention working on itself.
 
-If you adopt `.ai/` in a public repo and some of it isn't meant for the world, do the same: gitignore
-the whole `.ai/` directory, or just the subdirectories you want to keep private (e.g. `plans/`,
-`notes/`). It works the same either way.
+Adopting `.ai/` in a public repo? Favor sharing over hiding. The whole point is that your project's
+context is legible to anyone — human or agent — who clones it. So commit the parts a contributor
+would benefit from and write them *for* that audience. Keep what's genuinely personal or sensitive —
+scratch notes, secrets, half-formed drafts — local by prefixing the file or folder with `_` (the
+shipped `.ai/.gitignore` ignores anything starting with `_`). Gitignoring the entire `.ai/`
+directory is the fallback for repos that are private by default — not the default move.
 
 ## License
 
