@@ -17,9 +17,11 @@ curl -fsSL https://raw.githubusercontent.com/AJMarquez99/dot-ai/main/install.sh 
 ```
 
 ```sh
-# Node / cross-platform
-npx github:AJMarquez99/dot-ai
+# Node / cross-platform (works on Windows, no git required)
+npx @ajmarquez99/dot-ai
 ```
+
+> Want the latest unreleased version straight from source? `npx github:AJMarquez99/dot-ai`.
 
 The installer:
 1. Drops a clean `.ai/` into your project (never overwriting existing files).
@@ -41,12 +43,13 @@ The installer:
 | Gemini | `./GEMINI.md` | `~/.gemini/GEMINI.md` |
 | Codex  | `./AGENTS.md` | `~/.codex/AGENTS.md` |
 
-The plans-directory setting always stays **project-local** even with `--global`, because
-`.ai/plans` is a per-project path.
+`--global` needs at least one tool flag (it only changes *where* the block goes). Codex honors
+`$CODEX_HOME` if set (defaulting to `~/.codex`). The plans-directory setting always stays
+**project-local** even with `--global`, because `.ai/plans` is a per-project path.
 
 **Scaffold only.** Already have the convention wired in globally? Pass `--no-md` to create just
 the `.ai/` tree and its READMEs — no MD files, no settings touched. (`--no-md` can't be combined
-with a tool flag or `--global`.)
+with a tool flag — `--claude`/`--gemini`/`--codex`/`--all` — or `--global`.)
 
 Non-interactive? Pass targets explicitly: `... | sh -s -- --all` (or `--claude --gemini --codex`),
 add `--global` to target user-level config. The plans setting defaults to on; add `--no-plans` to
