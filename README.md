@@ -96,6 +96,25 @@ The installer appends a marked block to your agent's config file:
 
 Re-running the installer updates just that block — your other instructions are never touched.
 
+**Adding your own instructions.** Put anything personal *below* the `<!-- END .ai-convention -->`
+marker. The installer only ever rewrites the region between the markers, so content after `END`
+survives every reinstall and never gets duplicated:
+
+```markdown
+<!-- BEGIN .ai-convention -->
+…installer-managed convention…
+<!-- END .ai-convention -->
+
+## My instructions
+Your personal additions here — preserved across reinstalls.
+```
+
+Because the installer recognizes that marked block, a config that already has it (e.g. wired into
+your **global** `~/.claude/CLAUDE.md`) is flagged as `(already global)` in the interactive prompt —
+a reminder that wiring it into an individual repo is only needed to share the convention with
+collaborators. If your global config predates the markers, re-run the installer to resync it to the
+canonical block, then keep your personal notes below `END`.
+
 ## Why adopt it
 
 - **Portable.** Plain Markdown in your repo, not a vendor's memory store. Works across every agent.

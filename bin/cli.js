@@ -76,6 +76,23 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows has no $HOME).
 function homeDir() { return process.env.HOME || os.homedir(); }
 
+// Where a tool loads its user-level (global) config from.
+function globalConfigFile(tool) {
+  if (tool === 'claude') return path.join(homeDir(), '.claude', 'CLAUDE.md');
+  if (tool === 'gemini') return path.join(homeDir(), '.gemini', 'GEMINI.md');
+  if (tool === 'codex') return path.join(process.env.CODEX_HOME || path.join(homeDir(), '.codex'), 'AGENTS.md');
+  return null;
+}
+
+// True if a config file already carries the installer-written convention block
+// (the BEGIN marker). Used to flag local wiring as redundant when the convention is
+// already loaded globally. Marker-only by design: a marker-less hand-wired copy
+// should be resynced to the canonical block, not pattern-matched around.
+function conventionInstalled(file) {
+  if (!file || !fs.existsSync(file)) return false;
+  return fs.readFileSync(file, 'utf8').includes(BEGIN);
+}
+
 // Set a (possibly nested, dot-delimited) key on an object, creating parents.
 function setDeep(obj, keyPath, value) {
   const keys = keyPath.split('.');
@@ -167,9 +184,21 @@ async function main() {
 
   if (!anyFlag) {
     if (process.stdin.isTTY) {
+      // Flag tools whose global config already carries the convention — wiring it
+      // into this project too is usually redundant (it's already loaded everywhere).
+      const global = {
+        claude: conventionInstalled(globalConfigFile('claude')),
+        gemini: conventionInstalled(globalConfigFile('gemini')),
+        codex: conventionInstalled(globalConfigFile('codex')),
+      };
+      const tag = (t) => (global[t] ? ' (already global)' : '');
+      if (global.claude || global.gemini || global.codex) {
+        console.error('\nTools marked "(already global)" already load the convention from your user config —');
+        console.error('local wiring is only needed to commit it into a shared/public repo.');
+      }
       const ans = await ask(
         '\nWire the convention into which agent config files?\n' +
-        '  [1] CLAUDE.md  [2] GEMINI.md  [3] AGENTS.md  [a] all  [n] none\n' +
+        `  [1] CLAUDE.md${tag('claude')}  [2] GEMINI.md${tag('gemini')}  [3] AGENTS.md${tag('codex')}  [a] all  [n] none\n` +
         'Select (e.g. "1 3" or "a"): '
       );
       if (/a/i.test(ans)) { want.claude = want.gemini = want.codex = true; }
@@ -216,4 +245,9 @@ async function main() {
   console.error('Done.');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Run only when invoked as a CLI; when required (tests) just expose the helpers.
+if (require.main === module) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+} else {
+  module.exports = { conventionInstalled, globalConfigFile };
+}

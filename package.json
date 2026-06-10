@@ -1,22 +1,48 @@
 {
   "name": "@ajmarquez99/dot-ai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A tiny, tool-agnostic convention for the context you give your coding agents.",
-  "bin": { "dot-ai": "bin/cli.js" },
-  "files": ["bin/", "template/", "agent-instructions.md", "SPEC.md", "LICENSE", "README.md"],
+  "bin": {
+    "dot-ai": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "template/",
+    "agent-instructions.md",
+    "SPEC.md",
+    "LICENSE",
+    "README.md"
+  ],
   "license": "MIT",
   "author": "Alejandro Marquez",
   "type": "commonjs",
-  "engines": { "node": ">=14" },
+  "engines": {
+    "node": ">=14"
+  },
   "scripts": {
     "test": "sh test/install_test.sh",
     "smoke": "node test/smoke.js",
     "pack-test": "node test/pack-install.js",
     "prepublishOnly": "npm test"
   },
-  "repository": { "type": "git", "url": "git+https://github.com/AJMarquez99/dot-ai.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AJMarquez99/dot-ai.git"
+  },
   "homepage": "https://github.com/AJMarquez99/dot-ai#readme",
-  "bugs": { "url": "https://github.com/AJMarquez99/dot-ai/issues" },
-  "keywords": ["ai", "agents", "claude", "gemini", "codex", "context", "convention"],
-  "publishConfig": { "access": "public" }
+  "bugs": {
+    "url": "https://github.com/AJMarquez99/dot-ai/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "claude",
+    "gemini",
+    "codex",
+    "context",
+    "convention"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
