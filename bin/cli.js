@@ -31,15 +31,17 @@ const ROOT = path.join(__dirname, '..');
 const BEGIN = '<!-- BEGIN .ai-convention -->';
 const END = '<!-- END .ai-convention -->';
 
-function copyTree(srcDir, destDir) {
+function copyTree(srcDir, destDir, dry) {
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const s = path.join(srcDir, entry.name);
     const d = path.join(destDir, entry.name);
     if (entry.isDirectory()) {
-      fs.mkdirSync(d, { recursive: true });
-      copyTree(s, d);
+      if (!dry) fs.mkdirSync(d, { recursive: true });
+      copyTree(s, d, dry);
     } else if (fs.existsSync(d)) {
       console.error(`  skip (exists): ${path.relative(process.cwd(), d)}`);
+    } else if (dry) {
+      console.error(`  would add: ${path.relative(process.cwd(), d)}`);
     } else {
       fs.mkdirSync(path.dirname(d), { recursive: true });
       fs.copyFileSync(s, d);
@@ -48,7 +50,8 @@ function copyTree(srcDir, destDir) {
   }
 }
 
-function inject(target, block) {
+function inject(target, block, dry) {
+  if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (fs.existsSync(target)) {
     const cur = fs.readFileSync(target, 'utf8');
@@ -82,7 +85,8 @@ function setDeep(obj, keyPath, value) {
 }
 
 // Merge one key into a JSON settings file without clobbering existing keys.
-function mergeJsonSetting(file, keyPath, value) {
+function mergeJsonSetting(file, keyPath, value, dry) {
+  if (dry) { console.error(`  would set ${keyPath}=${value} in: ${file}`); return; }
   let data = {};
   if (fs.existsSync(file)) {
     const raw = fs.readFileSync(file, 'utf8').trim();
@@ -100,14 +104,16 @@ function mergeJsonSetting(file, keyPath, value) {
 const PLANS_DIR = '.ai/plans';
 
 // Point each selected tool's plan-mode output at .ai/plans (local-scoped).
-function writePlansSetting(want) {
+function writePlansSetting(want, dry) {
   if (want.claude) {
-    mergeJsonSetting(path.join('.claude', 'settings.local.json'), 'plansDirectory', PLANS_DIR);
+    mergeJsonSetting(path.join('.claude', 'settings.local.json'), 'plansDirectory', PLANS_DIR, dry);
   }
   if (want.gemini) {
-    mergeJsonSetting(path.join('.gemini', 'settings.json'), 'general.plan.directory', PLANS_DIR);
-    console.error(`  note: Gemini also needs a policy allowing writes to ${PLANS_DIR} —`);
-    console.error('        add a rule under ~/.gemini/policies (not done automatically).');
+    mergeJsonSetting(path.join('.gemini', 'settings.json'), 'general.plan.directory', PLANS_DIR, dry);
+    if (!dry) {
+      console.error(`  note: Gemini also needs a policy allowing writes to ${PLANS_DIR} —`);
+      console.error('        add a rule under ~/.gemini/policies (not done automatically).');
+    }
   }
   if (want.codex) {
     console.error('  note: Codex has no plans-directory setting; skipping.');
@@ -125,6 +131,7 @@ async function main() {
   let anyFlag = false;
   let noPlans = false;
   let noMd = false;
+  let dryRun = false;
   if (args.includes('-h') || args.includes('--help')) { usage(); return; }
   if (args.includes('-V') || args.includes('--version')) { console.log(pkg.version); return; }
   for (const a of args) {
@@ -135,6 +142,7 @@ async function main() {
     else if (a === '--global') { want.global = true; anyFlag = true; }
     else if (a === '--no-md') { noMd = true; anyFlag = true; }
     else if (a === '--no-plans') { noPlans = true; }
+    else if (a === '--dry-run') { dryRun = true; }
     else if (a === '-h' || a === '--help' || a === '-V' || a === '--version') { /* handled above */ }
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
@@ -146,7 +154,7 @@ async function main() {
   }
 
   console.error('Installing .ai/ scaffold…');
-  copyTree(path.join(ROOT, 'template', '.ai'), path.join(process.cwd(), '.ai'));
+  copyTree(path.join(ROOT, 'template', '.ai'), path.join(process.cwd(), '.ai'), dryRun);
 
   if (noMd) {
     console.error('Scaffold only (--no-md) — skipping agent config and settings.');
@@ -185,9 +193,9 @@ async function main() {
 
   const instructions = fs.readFileSync(path.join(ROOT, 'agent-instructions.md'), 'utf8').trimEnd();
   const block = `${BEGIN}\n${instructions}\n${END}`;
-  if (want.claude) inject(mdTarget('CLAUDE.md', '.claude'), block);
-  if (want.gemini) inject(mdTarget('GEMINI.md', '.gemini'), block);
-  if (want.codex)  inject(mdTarget('AGENTS.md', '.codex'), block);
+  if (want.claude) inject(mdTarget('CLAUDE.md', '.claude'), block, dryRun);
+  if (want.gemini) inject(mdTarget('GEMINI.md', '.gemini'), block, dryRun);
+  if (want.codex)  inject(mdTarget('AGENTS.md', '.codex'), block, dryRun);
 
   // Optionally point plan-mode output at .ai/plans for each selected tool.
   let wantPlans;
@@ -198,7 +206,7 @@ async function main() {
   } else {
     wantPlans = true; // default-yes for flagged / non-interactive runs (use --no-plans to skip)
   }
-  if (wantPlans && (want.claude || want.gemini || want.codex)) writePlansSetting(want);
+  if (wantPlans && (want.claude || want.gemini || want.codex)) writePlansSetting(want, dryRun);
 
   console.error('Done.');
 }

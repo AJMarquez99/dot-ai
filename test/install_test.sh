@@ -147,6 +147,20 @@ version_case() {
   pass "$name (version)"
 }
 
+# --dry-run previews everything and writes nothing.
+dryrun_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --all --dry-run 2>&1) || fail "$name: --dry-run exited non-zero"
+  printf '%s\n' "$out" | grep -qiF 'would' || fail "$name: --dry-run printed no 'would' preview"
+  [ -e .ai ] && fail "$name: --dry-run created .ai"
+  [ -e CLAUDE.md ] && fail "$name: --dry-run created CLAUDE.md"
+  [ -e .claude ] && fail "$name: --dry-run created .claude"
+  [ -e .gemini ] && fail "$name: --dry-run created .gemini"
+  cd /; rm -rf "$work"
+  pass "$name (dry-run)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
@@ -163,4 +177,6 @@ help_case    "install.sh" "sh $REPO_ROOT/install.sh"
 help_case    "cli.js"     "node $REPO_ROOT/bin/cli.js"
 version_case "install.sh" "sh $REPO_ROOT/install.sh"
 version_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+dryrun_case "install.sh" "sh $REPO_ROOT/install.sh"
+dryrun_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

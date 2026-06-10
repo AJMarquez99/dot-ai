@@ -61,7 +61,7 @@ for arg in "$@"; do
 done
 
 # Parse tool flags.
-DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0; GLOBAL=0; NO_MD=0
+DO_CLAUDE=0; DO_GEMINI=0; DO_CODEX=0; ANY_FLAG=0; NO_PLANS=0; GLOBAL=0; NO_MD=0; DRY=0
 for arg in "$@"; do
   case "$arg" in
     --all) DO_CLAUDE=1; DO_GEMINI=1; DO_CODEX=1; ANY_FLAG=1 ;;
@@ -71,6 +71,7 @@ for arg in "$@"; do
     --global) GLOBAL=1; ANY_FLAG=1 ;;
     --no-md) NO_MD=1; ANY_FLAG=1 ;;
     --no-plans) NO_PLANS=1 ;;
+    --dry-run) DRY=1 ;;
     -h|--help) usage; exit 0 ;;
     -V|--version) printf '%s\n' "$VERSION"; exit 0 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
@@ -89,6 +90,8 @@ log "Installing .ai/ scaffold…"
   dest="./$rel"
   if [ -e "$dest" ]; then
     log "  skip (exists): $rel"
+  elif [ "$DRY" -eq 1 ]; then
+    log "  would add: $rel"
   else
     mkdir -p "$(dirname -- "$dest")"
     cp "$SRC/template/$rel" "$dest"
@@ -155,6 +158,10 @@ md_target() {
 # values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
+  if [ "$DRY" -eq 1 ]; then
+    log "  would inject convention block -> $target"
+    return 0
+  fi
   mkdir -p "$(dirname -- "$target")"
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
@@ -190,6 +197,10 @@ fi
 
 merge_json() {
   f="$1"; key="$2"; val="$3"
+  if [ "$DRY" -eq 1 ]; then
+    log "  would set $key=$val in: $f"
+    return 0
+  fi
   mkdir -p "$(dirname -- "$f")"
   case "$JSON_ENGINE" in
     jq)
@@ -247,8 +258,10 @@ if [ "$WANT_PLANS" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ]
   [ "$DO_CLAUDE" -eq 1 ] && merge_json ".claude/settings.local.json" "plansDirectory" ".ai/plans"
   if [ "$DO_GEMINI" -eq 1 ]; then
     merge_json ".gemini/settings.json" "general.plan.directory" ".ai/plans"
-    log "  note: Gemini also needs a policy allowing writes to .ai/plans —"
-    log "        add a rule under ~/.gemini/policies (not done automatically)."
+    if [ "$DRY" -eq 0 ]; then
+      log "  note: Gemini also needs a policy allowing writes to .ai/plans —"
+      log "        add a rule under ~/.gemini/policies (not done automatically)."
+    fi
   fi
   [ "$DO_CODEX" -eq 1 ] && log "  note: Codex has no plans-directory setting; skipping."
 fi
