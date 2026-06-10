@@ -72,6 +72,8 @@ for arg in "$@"; do
     --no-md) NO_MD=1; ANY_FLAG=1 ;;
     --no-plans) NO_PLANS=1 ;;
     --dry-run) DRY=1 ;;
+    # Redundant by design: the pre-scans above already short-circuit -h/-V.
+    # Kept so the parser stays total if a pre-scan is ever removed.
     -h|--help) usage; exit 0 ;;
     -V|--version) printf '%s\n' "$VERSION"; exit 0 ;;
     *) log "Unknown option: $arg"; exit 2 ;;
