@@ -63,6 +63,16 @@ check('--global exits 0', g.ok);
 check('--global writes ~/.claude/CLAUDE.md', exists(home, '.claude', 'CLAUDE.md'));
 check('--global writes no local CLAUDE.md', !exists(d, 'CLAUDE.md'));
 
+// --codex --global honors $CODEX_HOME (the Windows path where HOME is unset).
+d = tmp();
+const ch = tmp();
+const cx = run(['--codex', '--global', '--no-plans'], {
+  cwd: d, env: { ...process.env, HOME: home, CODEX_HOME: ch },
+});
+check('--codex --global exits 0', cx.ok);
+check('--codex --global writes $CODEX_HOME/AGENTS.md', exists(ch, 'AGENTS.md'));
+check('--codex --global writes no local AGENTS.md', !exists(d, 'AGENTS.md'));
+
 // Unknown option exits non-zero.
 check('unknown option fails', !run(['--nope'], { cwd: tmp() }).ok);
 

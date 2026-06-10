@@ -7,17 +7,18 @@ on:
 
 jobs:
   harness:
-    name: installer suite (${{ matrix.os }})
+    name: installer suite (${{ matrix.os }}, node ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        node: [18, 20]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
       # Full POSIX harness: exercises BOTH install.sh and bin/cli.js.
       - run: sh test/install_test.sh
       # cli.js smoke (also the Windows path) — belt and suspenders on Unix.

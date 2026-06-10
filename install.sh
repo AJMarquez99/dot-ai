@@ -184,7 +184,11 @@ inject() {
   else
     if [ -f "$target" ]; then
       # Match cli.js: ensure one trailing newline, then a blank separator line.
-      [ -n "$(tail -c1 "$target" 2>/dev/null)" ] && printf '\n' >> "$target"
+      # Add a newline unless the file is non-empty and already ends in one
+      # (empty files need it too, to match cli.js).
+      if [ ! -s "$target" ] || [ -n "$(tail -c1 "$target" 2>/dev/null)" ]; then
+        printf '\n' >> "$target"
+      fi
       printf '\n' >> "$target"
     fi
     cat "$bf" >> "$target"

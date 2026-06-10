@@ -187,6 +187,7 @@ dryrun_combo_case() {
   [ -e .ai ] && fail "$name: --no-plans --dry-run created .ai"
   [ -e CLAUDE.md ] && fail "$name: --no-plans --dry-run created CLAUDE.md"
   printf '%s\n' "$out" | grep -qiF 'would set' && fail "$name: --no-plans --dry-run previewed a plans write"
+  printf '%s\n' "$out" | grep -qiF 'would inject' || fail "$name: --no-plans --dry-run printed no inject preview"
   cd /; rm -rf "$work"
   pass "$name (dry-run combos)"
 }
@@ -201,6 +202,12 @@ inject_newline_parity_case() {
   ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
   diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "inject newline parity: install.sh vs cli.js differ"
   rm -rf "$a" "$b"
+  c=$(mktemp -d); e=$(mktemp -d)
+  : > "$c/CLAUDE.md"; : > "$e/CLAUDE.md"   # empty existing files
+  ( cd "$c" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$e" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$c/CLAUDE.md" "$e/CLAUDE.md" || fail "inject newline parity (empty file): installers differ"
+  rm -rf "$c" "$e"
   pass "inject newline parity (no trailing newline)"
 }
 
