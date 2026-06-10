@@ -163,6 +163,54 @@ dryrun_case() {
   pass "$name (dry-run)"
 }
 
+# --codex --global honors $CODEX_HOME (default ~/.codex).
+codex_home_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); ch=$(mktemp -d); cd "$work"
+  CODEX_HOME="$ch" $runner --codex --global --no-plans >/dev/null 2>&1
+  [ -f "$ch/AGENTS.md" ] || fail "$name: --codex --global ignored CODEX_HOME"
+  grep -qF '<!-- BEGIN .ai-convention -->' "$ch/AGENTS.md" || fail "$name: block not in \$CODEX_HOME/AGENTS.md"
+  [ -e AGENTS.md ] && fail "$name: --codex --global also wrote a local AGENTS.md"
+  cd /; rm -rf "$work" "$ch"
+  pass "$name (codex-home)"
+}
+
+# --dry-run combined with --no-md / --no-plans writes nothing and previews correctly.
+dryrun_combo_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --no-md --dry-run 2>&1) || fail "$name: --no-md --dry-run exited non-zero"
+  printf '%s\n' "$out" | grep -qiF 'would add' || fail "$name: --no-md --dry-run printed no scaffold preview"
+  [ -e .ai ] && fail "$name: --no-md --dry-run created .ai"
+  cd /; rm -rf "$work"; work=$(mktemp -d); cd "$work"
+  out=$($runner --claude --no-plans --dry-run 2>&1) || fail "$name: --no-plans --dry-run exited non-zero"
+  [ -e .ai ] && fail "$name: --no-plans --dry-run created .ai"
+  [ -e CLAUDE.md ] && fail "$name: --no-plans --dry-run created CLAUDE.md"
+  printf '%s\n' "$out" | grep -qiF 'would set' && fail "$name: --no-plans --dry-run previewed a plans write"
+  printf '%s\n' "$out" | grep -qiF 'would inject' || fail "$name: --no-plans --dry-run printed no inject preview"
+  cd /; rm -rf "$work"
+  pass "$name (dry-run combos)"
+}
+
+# inject() output is byte-identical between the two installers for a target
+# that lacks a trailing newline (regression guard for newline separation).
+inject_newline_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# title\nKEEP-ME' > "$a/CLAUDE.md"   # no trailing newline
+  printf '# title\nKEEP-ME' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "inject newline parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  c=$(mktemp -d); e=$(mktemp -d)
+  : > "$c/CLAUDE.md"; : > "$e/CLAUDE.md"   # empty existing files
+  ( cd "$c" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$e" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$c/CLAUDE.md" "$e/CLAUDE.md" || fail "inject newline parity (empty file): installers differ"
+  rm -rf "$c" "$e"
+  pass "inject newline parity (no trailing newline)"
+}
+
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"
@@ -181,4 +229,9 @@ version_case "install.sh" "sh $REPO_ROOT/install.sh"
 version_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 dryrun_case "install.sh" "sh $REPO_ROOT/install.sh"
 dryrun_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+codex_home_case   "install.sh" "sh $REPO_ROOT/install.sh"
+codex_home_case   "cli.js"     "node $REPO_ROOT/bin/cli.js"
+dryrun_combo_case "install.sh" "sh $REPO_ROOT/install.sh"
+dryrun_combo_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+inject_newline_parity_case
 printf 'ALL PASS\n'

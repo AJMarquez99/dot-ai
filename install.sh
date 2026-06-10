@@ -155,6 +155,11 @@ md_target() {
   if [ "$GLOBAL" -eq 1 ]; then printf '%s/%s/%s' "$HOME" "$2" "$1"; else printf '%s' "$1"; fi
 }
 
+# Codex global config honors $CODEX_HOME (default ~/.codex).
+codex_target() {
+  if [ "$GLOBAL" -eq 1 ]; then printf '%s/AGENTS.md' "${CODEX_HOME:-$HOME/.codex}"; else printf 'AGENTS.md'; fi
+}
+
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
@@ -177,7 +182,15 @@ inject() {
     mv "$tmp" "$target"
     log "  updated block in: $target"
   else
-    [ -f "$target" ] && printf '\n' >> "$target"
+    if [ -f "$target" ]; then
+      # Match cli.js: ensure one trailing newline, then a blank separator line.
+      # Add a newline unless the file is non-empty and already ends in one
+      # (empty files need it too, to match cli.js).
+      if [ ! -s "$target" ] || [ -n "$(tail -c1 "$target" 2>/dev/null)" ]; then
+        printf '\n' >> "$target"
+      fi
+      printf '\n' >> "$target"
+    fi
     cat "$bf" >> "$target"
     log "  appended block to: $target"
   fi
@@ -186,7 +199,7 @@ inject() {
 
 [ "$DO_CLAUDE" -eq 1 ] && inject "$(md_target CLAUDE.md .claude)"
 [ "$DO_GEMINI" -eq 1 ] && inject "$(md_target GEMINI.md .gemini)"
-[ "$DO_CODEX" -eq 1 ] && inject "$(md_target AGENTS.md .codex)"
+[ "$DO_CODEX" -eq 1 ] && inject "$(codex_target)"
 
 # 3) Merge a single (possibly nested, dot-delimited) key into a JSON settings
 # file without clobbering existing keys. Needs jq, node, or python3; if none is
