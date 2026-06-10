@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  harness:
+    name: installer suite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Full POSIX harness: exercises BOTH install.sh and bin/cli.js.
+      - run: sh test/install_test.sh
+      # cli.js smoke (also the Windows path) — belt and suspenders on Unix.
+      - run: node test/smoke.js
+
+  windows:
+    name: cli.js smoke (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # install.sh can't run natively on Windows; cli.js is the real Windows
+      # (npx) path, so smoke-test it directly.
+      - run: node test/smoke.js
