@@ -22,6 +22,7 @@ run_case() {
   [ "$(find .ai -type d | wc -l | tr -d ' ')" -ge 12 ] || fail "$name: missing folders"
   [ -f .ai/.gitignore ] || fail "$name: .ai/.gitignore not created"
   grep -qF '_*' .ai/.gitignore || fail "$name: .ai/.gitignore missing _* local-prefix rule"
+  [ -e .ai/gitignore ] && fail "$name: undotted .ai/gitignore leaked into project"
   grep -qF 'KEEP-ME' CLAUDE.md || fail "$name: clobbered existing content"
   grep -qF '<!-- BEGIN .ai-convention -->' CLAUDE.md || fail "$name: block not appended"
 
@@ -211,6 +212,17 @@ inject_newline_parity_case() {
   pass "inject newline parity (no trailing newline)"
 }
 
+# Guard the npm trap: npm renames .gitignore -> .npmignore on install, so the
+# template must ship its ignore files as `gitignore` (no dot), never `.gitignore`.
+template_ignore_naming_case() {
+  bad=$(cd "$REPO_ROOT" && find template -name '.gitignore' -o -name '.npmignore')
+  [ -z "$bad" ] || fail "template ships a dotted ignore file npm will mangle: $bad"
+  [ -f "$REPO_ROOT/template/.ai/gitignore" ] || fail "template/.ai/gitignore missing"
+  [ -f "$REPO_ROOT/template/.ai/context/gitignore" ] || fail "template/.ai/context/gitignore missing"
+  pass "template ships undotted gitignore files"
+}
+
+template_ignore_naming_case
 run_case "install.sh" "sh $REPO_ROOT/install.sh"
 run_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 plans_case "install.sh" "sh $REPO_ROOT/install.sh"

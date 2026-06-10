@@ -4,6 +4,3 @@
 #   .ai/knowledge/_secrets.md   ->  ignored
 #   .ai/_scratch/               ->  ignored (whole dir)
 _*
-
-# Keep this file itself tracked/shipped (npm strips .gitignore files by default).
-!.gitignore

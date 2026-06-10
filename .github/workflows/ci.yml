@@ -24,6 +24,16 @@ jobs:
       # cli.js smoke (also the Windows path) — belt and suspenders on Unix.
       - run: node test/smoke.js
 
+  package:
+    name: pack + install round-trip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node test/pack-install.js
+
   windows:
     name: cli.js smoke (windows-latest)
     runs-on: windows-latest

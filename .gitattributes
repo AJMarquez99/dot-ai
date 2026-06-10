@@ -1,0 +1,4 @@
+# Keep executable scripts LF-only so the shebang works on Unix regardless of a
+# contributor's core.autocrlf setting (a published bin with CRLF breaks on Unix).
+bin/cli.js text eol=lf
+*.sh text eol=lf

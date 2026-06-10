@@ -34,7 +34,10 @@ const END = '<!-- END .ai-convention -->';
 function copyTree(srcDir, destDir, dry) {
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const s = path.join(srcDir, entry.name);
-    const d = path.join(destDir, entry.name);
+    // npm renames any shipped `.gitignore` to `.npmignore` on install, so the
+    // template ships ignore files as `gitignore` (no dot); restore the dot here.
+    const destName = entry.name === 'gitignore' ? '.gitignore' : entry.name;
+    const d = path.join(destDir, destName);
     if (entry.isDirectory()) {
       if (!dry) fs.mkdirSync(d, { recursive: true });
       copyTree(s, d, dry);

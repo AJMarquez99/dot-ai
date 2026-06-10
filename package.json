@@ -6,12 +6,17 @@
   "files": ["bin/", "template/", "agent-instructions.md", "SPEC.md", "LICENSE", "README.md"],
   "license": "MIT",
   "author": "Alejandro Marquez",
+  "type": "commonjs",
   "engines": { "node": ">=14" },
   "scripts": {
     "test": "sh test/install_test.sh",
     "smoke": "node test/smoke.js",
+    "pack-test": "node test/pack-install.js",
     "prepublishOnly": "npm test"
   },
-  "repository": { "type": "git", "url": "https://github.com/AJMarquez99/dot-ai.git" },
-  "keywords": ["ai", "agents", "claude", "gemini", "codex", "context", "convention"]
+  "repository": { "type": "git", "url": "git+https://github.com/AJMarquez99/dot-ai.git" },
+  "homepage": "https://github.com/AJMarquez99/dot-ai#readme",
+  "bugs": { "url": "https://github.com/AJMarquez99/dot-ai/issues" },
+  "keywords": ["ai", "agents", "claude", "gemini", "codex", "context", "convention"],
+  "publishConfig": { "access": "public" }
 }

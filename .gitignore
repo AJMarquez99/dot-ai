@@ -8,5 +8,5 @@ node_modules/
 # In the shipped template, context/ holds regenerable session state —
 # track the folder + README, ignore the contents.
 template/.ai/context/*
-!template/.ai/context/.gitignore
+!template/.ai/context/gitignore
 !template/.ai/context/README.md
