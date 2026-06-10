@@ -190,12 +190,14 @@ async function main() {
   }
 
   const mdTarget = (file, subdir) => want.global ? path.join(homeDir(), subdir, file) : file;
+  const codexHome = () => process.env.CODEX_HOME || path.join(homeDir(), '.codex');
+  const codexTarget = () => want.global ? path.join(codexHome(), 'AGENTS.md') : 'AGENTS.md';
 
   const instructions = fs.readFileSync(path.join(ROOT, 'agent-instructions.md'), 'utf8').trimEnd();
   const block = `${BEGIN}\n${instructions}\n${END}`;
   if (want.claude) inject(mdTarget('CLAUDE.md', '.claude'), block, dryRun);
   if (want.gemini) inject(mdTarget('GEMINI.md', '.gemini'), block, dryRun);
-  if (want.codex)  inject(mdTarget('AGENTS.md', '.codex'), block, dryRun);
+  if (want.codex)  inject(codexTarget(), block, dryRun);
 
   // Optionally point plan-mode output at .ai/plans for each selected tool.
   let wantPlans;
