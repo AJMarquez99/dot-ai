@@ -1,0 +1,4 @@
+# Local-only files: personal or in-flight work uses the `_` prefix — the same
+# convention this project ships and documents. Anything whose name starts with
+# `_` stays on the contributor's machine and out of git.
+_*

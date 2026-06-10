@@ -60,14 +60,13 @@ One test: **is the content regenerable?**
   clone.
 - **Regenerable** (machine-derived session state) → **track the folder + a `README`, gitignore the
   contents.** This is `context/` only.
-- Additionally gitignore anything containing **sensitive data** (keys, credentials, drafts).
-- **Public repository?** If some `.ai/` content isn't meant for the world, gitignore the whole
-  directory or just the specific subdirectories that hold it (e.g. `plans/`, `notes/`). The
-  convention works the same whether or not `.ai/` is committed.
-- **Keep individual files local.** Anything whose name starts with `_` is gitignored by the shipped
-  `.ai/.gitignore` — so you can commit the scaffold and shared files in a public repo while keeping
-  personal notes, secrets, or drafts on your machine (e.g. `knowledge/_secrets.md`, or a whole
-  `_scratch/` dir). Don't prefix a file you intend to share.
+- **Public repository?** Favor sharing over hiding — the convention assumes `.ai/` is committed and
+  legible to anyone who clones the repo. Commit the shareable folders (`knowledge/`, `guidelines/`,
+  `runbooks/`) and write them *for* that audience. Keep anything personal or sensitive — scratch
+  notes, secrets, half-formed drafts — local by prefixing the file or folder with `_`: the shipped
+  `.ai/.gitignore` ignores anything starting with `_` (e.g. `knowledge/_secrets.md`, or a whole
+  `_scratch/` dir). Don't prefix a file you intend to share. Gitignoring the whole `.ai/` directory
+  is the fallback for repos that are private by default — not the default move.
 
 ## Archive policy
 

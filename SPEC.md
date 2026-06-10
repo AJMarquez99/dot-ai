@@ -31,14 +31,15 @@ promote up, the rest is thrown away. Nothing is meant to sit still.
 Is the content regenerable? If a fresh clone could rebuild it from the code and git history, it's
 session state — track the folder, gitignore the contents (this is `context/` only). Everything else
 is human intent or derived truth: commit it. Transient does not mean untracked — `lessons/` and
-`notes/` are committed precisely so they survive a clone. And if your repository is public, gitignore
-`.ai/` (or specific subdirectories) for anything not meant for the world — exactly as this repo keeps
-its own `.ai/` workspace private.
+`notes/` are committed precisely so they survive a clone.
 
-For finer control in a public repo, the shipped `.ai/.gitignore` ignores any file or directory whose
-name starts with `_`. Commit the scaffold and the files worth sharing, and prefix personal notes,
-secrets, or drafts with `_` (e.g. `knowledge/_secrets.md`, or a whole `_scratch/` dir) to keep them
-local. Don't prefix a file you mean to share.
+Public repository? Favor sharing over hiding. The convention assumes `.ai/` is committed and legible
+to anyone who clones the repo, so commit the shareable folders (`knowledge/`, `guidelines/`,
+`runbooks/`) and write them for that audience. Keep personal or sensitive files local by prefixing
+the file or folder with `_` — the shipped `.ai/.gitignore` ignores anything starting with `_` (e.g.
+`knowledge/_secrets.md`, or a whole `_scratch/` dir). Gitignoring the whole `.ai/` directory is the
+fallback for repos that are private by default. This repo dogfoods exactly that: its `.ai/` is
+committed, with in-flight scratch kept local via `_`.
 
 ## Adopting it
 
