@@ -76,5 +76,15 @@ check('--codex --global writes no local AGENTS.md', !exists(d, 'AGENTS.md'));
 // Unknown option exits non-zero.
 check('unknown option fails', !run(['--nope'], { cwd: tmp() }).ok);
 
+// conventionInstalled(): marker-only — flags an installer-written block so the
+// interactive prompt can mark already-global tools as redundant to re-wire. A
+// marker-less hand-wired copy is intentionally NOT matched (it should be resynced).
+const { conventionInstalled } = require(CLI);
+function fileWith(contents) { const f = path.join(tmp(), 'CFG.md'); fs.writeFileSync(f, contents); return f; }
+check('detects BEGIN-marker block', conventionInstalled(fileWith('# x\n<!-- BEGIN .ai-convention -->\n…\n<!-- END .ai-convention -->\n')));
+check('ignores marker-less .ai/ prose', !conventionInstalled(fileWith('## .ai/ Project Directory\n\nstuff\n')));
+check('ignores unrelated config', !conventionInstalled(fileWith('# My CLAUDE.md\n\nBe concise.\n')));
+check('ignores a missing file', !conventionInstalled(path.join(tmp(), 'nope.md')));
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSMOKE OK');
 process.exit(failures ? 1 : 0);
