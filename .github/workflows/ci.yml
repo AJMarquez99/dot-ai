@@ -9,12 +9,15 @@ on:
 jobs:
   # Lint the POSIX shell — dot-ai's "quality" gate (shellcheck), matching the family
   # convention of a required `quality` status check alongside `ci`.
+  # NB: no job-level `name:` — the status-check context must be exactly `quality`
+  # (the ruleset requires it). A `name:` would rename the context and the required
+  # check would wait forever.
   quality:
-    name: shellcheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck install.sh test/install_test.sh
+      - name: shellcheck
+        run: shellcheck install.sh test/install_test.sh
 
   harness:
     name: installer suite (${{ matrix.os }}, node ${{ matrix.node }})
