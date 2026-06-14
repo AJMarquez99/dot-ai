@@ -135,6 +135,14 @@ scratch notes, secrets, half-formed drafts — local by prefixing the file or fo
 shipped `.ai/.gitignore` ignores anything starting with `_`). Gitignoring the entire `.ai/`
 directory is the fallback for repos that are private by default — not the default move.
 
+## Tools using this convention
+
+`.ai/` is used in the wild by a small family of personal, agent-driven CLIs — handy as real-world
+examples of the convention in a shipped project:
+
+- **[gmail-cli](https://github.com/AJMarquez99/gmail-cli)** — a fail-closed Gmail CLI for AI agents
+  (send + IMAP read), with its own curated `.ai/`.
+
 ## License
 
 [MIT](./LICENSE) © 2026 Alejandro Marquez
