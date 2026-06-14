@@ -2,10 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
+    branches: [main, staging]
 
 jobs:
+  # Lint the POSIX shell — dot-ai's "quality" gate (shellcheck), matching the family
+  # convention of a required `quality` status check alongside `ci`.
+  quality:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck install.sh test/install_test.sh
+
   harness:
     name: installer suite (${{ matrix.os }}, node ${{ matrix.node }})
     strategy:
@@ -45,3 +55,11 @@ jobs:
       # install.sh can't run natively on Windows; cli.js is the real Windows
       # (npx) path, so smoke-test it directly.
       - run: node test/smoke.js
+
+  # Aggregator → the single required "ci" status check (green only if the whole
+  # matrix + package + windows suite passed). `quality` is required separately.
+  ci:
+    needs: [harness, package, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "installer suite green across the matrix"
