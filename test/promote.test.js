@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -15,11 +15,9 @@ function check(name, fn) {
 function tmp() { return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-prom-'))); }
 function sync(cwd) { execFileSync(process.execPath, [CLI, 'sync'], { cwd, stdio: 'ignore' }); }
 function promote(cwd, home, args) {
-  try {
-    const out = execFileSync(process.execPath, [CLI, 'promote', ...args],
-      { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOME: home } });
-    return { ok: true, out: out.toString() };
-  } catch (e) { return { ok: false, out: ((e.stdout || '') + (e.stderr || '')).toString() }; }
+  const res = spawnSync(process.execPath, [CLI, 'promote', ...args],
+    { cwd, encoding: 'utf8', env: { ...process.env, HOME: home } });
+  return { ok: res.status === 0, out: (res.stdout || '') + (res.stderr || '') };
 }
 const exists = (...p) => fs.existsSync(path.join(...p));
 

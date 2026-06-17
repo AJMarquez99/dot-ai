@@ -57,12 +57,12 @@ function run(opts) {
     console.error(`promote: destination already exists: ${show(dest)} (use --overwrite)`); process.exit(2);
   }
   if (PROJECT_BOUND.includes(topFolder)) {
-    console.log(`  warning: ${topFolder}/ is project-bound; promoting it to a broader layer is unusual.`);
+    console.error(`  warning: ${topFolder}/ is project-bound; promoting it to a broader layer is unusual.`);
   }
   const body = fs.readFileSync(abs, 'utf8');
   const links = [...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
   if (links.length) {
-    console.log(`  note: file references ${links.length} [[link]](s) — verify they resolve from the target layer: ${links.join(', ')}`);
+    console.error(`  note: file references ${links.length} [[link]](s) — verify they resolve from the target layer: ${links.join(', ')}`);
   }
 
   fs.mkdirSync(path.dirname(dest), { recursive: true });
