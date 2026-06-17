@@ -15,8 +15,9 @@ const syncCmd = require('../src/commands/sync');
 const archiveCmd = require('../src/commands/archive');
 const pruneCmd = require('../src/commands/prune');
 const doctorCmd = require('../src/commands/doctor');
+const contextCmd = require('../src/commands/context');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor', 'context', 'resolve']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -26,6 +27,7 @@ Commands:
   wire           Inject/update the convention block into agent config only
   sync           Re-apply the latest .ai/ scaffold, prune stale folders, and resync convention blocks
   doctor         Diagnose the .ai/ structure (read-only)
+  context        Print the effective .ai/ cascade (alias: resolve)
   archive        Move a file into archive/ with a YYYY-MM-DD_ prefix
   prune          Delete archive/ entries past the retention window (dry-run by default)
 
@@ -196,6 +198,11 @@ async function runDoctor(args) {
   doctorCmd.run({ cwd: process.cwd() });
 }
 
+async function runContext(args) {
+  for (const a of args) { console.error(`Unknown option: ${a}`); process.exit(2); }
+  contextCmd.run({ cwd: process.cwd() });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -211,6 +218,7 @@ async function main() {
     else if (first === 'archive') return runArchive(rest);
     else if (first === 'prune') return runPrune(rest);
     else if (first === 'doctor') return runDoctor(rest);
+    else if (first === 'context' || first === 'resolve') return runContext(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
