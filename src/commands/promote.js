@@ -24,7 +24,7 @@ function run(opts) {
   try { st = fs.statSync(abs); } catch { console.error(`promote: not found: ${file}`); process.exit(2); }
   if (!st.isFile()) { console.error(`promote: not a file: ${file}`); process.exit(2); }
 
-  const chain = cascadeChain(path.dirname(abs));
+  const chain = cascadeChain(cwd);
   const srcIdx = layerOf(chain, abs);
   if (srcIdx === -1) { console.error(`promote: ${file} is not inside a .ai/ directory.`); process.exit(2); }
   const srcAi = chain[srcIdx];

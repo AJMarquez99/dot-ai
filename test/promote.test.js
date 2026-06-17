@@ -86,5 +86,22 @@ check('promote warns when promoting a project-bound folder, but proceeds', () =>
   assert.ok(exists(home, '.ai', 'plans', 'p.md'), 'still proceeds');
 });
 
+({ home, proj } = setup());
+fs.writeFileSync(path.join(home, '.ai', 'data', 'glob.md'), 'g\n');
+check('promote <file> down copies the file into the nearer layer (run from the deeper project)', () => {
+  // cwd = proj (deeper layer); the file lives in the broader ~/.ai layer
+  const r = promote(proj, home, [path.join(home, '.ai', 'data', 'glob.md'), 'down']);
+  assert.ok(r.ok, r.out);
+  assert.ok(exists(proj, '.ai', 'data', 'glob.md'), 'down -> proj/.ai/data');
+  assert.ok(exists(home, '.ai', 'data', 'glob.md'), 'source kept (copy default)');
+});
+// And: down errors when there is no nearer layer (run from the project on its own file).
+({ home, proj } = setup());
+fs.writeFileSync(path.join(proj, '.ai', 'data', 'own.md'), 'x\n');
+check('promote down errors when nothing is nearer', () => {
+  const r = promote(proj, home, ['.ai/data/own.md', 'down']);
+  assert.ok(!r.ok, 'should exit non-zero (nothing below the nearest layer)');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nPROMOTE OK');
 process.exit(failures ? 1 : 0);
