@@ -13,8 +13,9 @@ const initCmd = require('../src/commands/init');
 const wireCmd = require('../src/commands/wire');
 const syncCmd = require('../src/commands/sync');
 const archiveCmd = require('../src/commands/archive');
+const pruneCmd = require('../src/commands/prune');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -167,6 +168,22 @@ async function runArchive(args) {
   archiveCmd.run({ cwd: process.cwd(), target, retain, dry: dryRun });
 }
 
+async function runPrune(args) {
+  let force = false, dryRun = false, days = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--force' || a === '--yes') force = true;
+    else if (a === '--dry-run') dryRun = true;
+    else if (a === '--days') {
+      const v = args[++i];
+      if (v === undefined || !/^\d+$/.test(v)) { console.error('prune: --days needs a non-negative integer.'); process.exit(2); }
+      days = parseInt(v, 10);
+    } else { console.error(`Unknown option: ${a}`); process.exit(2); }
+  }
+  // --dry-run is the default; passing it explicitly just reaffirms non-destructive mode.
+  pruneCmd.run({ cwd: process.cwd(), force: force && !dryRun, days, dry: !force || dryRun });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -180,6 +197,7 @@ async function main() {
     else if (first === 'wire') return runWire(rest);
     else if (first === 'sync') return runSync(rest);
     else if (first === 'archive') return runArchive(rest);
+    else if (first === 'prune') return runPrune(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
