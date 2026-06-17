@@ -80,5 +80,22 @@ check('leaves block-less config untouched', () => {
   assert.strictEqual(fs.readFileSync(path.join(d, 'GEMINI.md'), 'utf8'), before);
 });
 
+// --global resyncs the home-dir block; without --global it is left alone.
+d = tmp();
+const gHome = tmp();
+fs.mkdirSync(path.join(gHome, '.claude'), { recursive: true });
+const claudeGlobal = path.join(gHome, '.claude', 'CLAUDE.md');
+fs.writeFileSync(claudeGlobal, '# user\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\n');
+execFileSync(process.execPath, [CLI, 'sync'], { cwd: d, stdio: 'ignore', env: { ...process.env, HOME: gHome } });
+check('sync without --global leaves home block untouched', () => {
+  assert.ok(fs.readFileSync(claudeGlobal, 'utf8').includes('OLD'), 'home block should be untouched');
+});
+execFileSync(process.execPath, [CLI, 'sync', '--global'], { cwd: d, stdio: 'ignore', env: { ...process.env, HOME: gHome } });
+check('sync --global resyncs the home block', () => {
+  const txt = fs.readFileSync(claudeGlobal, 'utf8');
+  assert.ok(!txt.includes('OLD'), 'home block should be resynced');
+  assert.ok(txt.match(/BEGIN \.ai-convention/g).length === 1, 'no duplicate');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSYNC OK');
 process.exit(failures ? 1 : 0);

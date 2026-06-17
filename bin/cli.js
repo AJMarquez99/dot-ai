@@ -141,15 +141,15 @@ async function runWire(args) {
 }
 
 async function runSync(args) {
-  let dryRun = false, global = false;
+  let dryRun = false, isGlobal = false;
   for (const a of args) {
     if (a === '--dry-run') dryRun = true;
-    else if (a === '--global') global = true;
+    else if (a === '--global') isGlobal = true;
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
   syncCmd.run({
     cwd: process.cwd(), templateAiDir: TEMPLATE_AI, instructionsPath: INSTRUCTIONS,
-    dry: dryRun, global,
+    dry: dryRun, global: isGlobal,
   });
   console.error('Done.');
 }

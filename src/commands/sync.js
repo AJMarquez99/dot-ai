@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { copyTree } = require('../lib/scaffold');
 const { isCanonical } = require('../lib/structure');
-const { BEGIN, END, escapeRe, globalConfigFile, conventionInstalled } = require('../lib/wiring');
+const { BEGIN, END, inject, globalConfigFile, conventionInstalled } = require('../lib/wiring');
 
-// A folder is "empty of user content" if it holds only README.md and/or .gitignore.
+// True if a folder has no user content — it holds at most README.md and/or .gitignore
+// (an empty folder also qualifies). Such folders are safe to prune.
 function onlyScaffoldFiles(dir) {
   const entries = fs.readdirSync(dir);
   return entries.every((e) => e === 'README.md' || e === '.gitignore');
@@ -29,18 +30,16 @@ function pruneStaleFolders(aiDir, dry) {
 }
 
 // Rewrite an existing convention block (only if present) to the latest instructions.
+// The conventionInstalled guard guarantees the file exists AND has the block, so
+// inject() takes its in-place replace branch — it never newly-wires a block-less file.
 function resyncBlock(file, block, dry) {
-  if (!conventionInstalled(file)) return;        // never newly-wires
-  if (dry) { console.error(`  would resync block in: ${file}`); return; }
-  const cur = fs.readFileSync(file, 'utf8');
-  const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}`);
-  fs.writeFileSync(file, cur.replace(re, block));
-  console.error(`  resynced block in: ${file}`);
+  if (!conventionInstalled(file)) return;   // never newly-wires
+  inject(file, block, dry);                 // delegates the BEGIN..END replace to wiring.inject
 }
 
 // opts: { cwd, templateAiDir, instructionsPath, dry, global }
 function run(opts) {
-  const { cwd, templateAiDir, instructionsPath, dry, global } = opts;
+  const { cwd, templateAiDir, instructionsPath, dry, global: isGlobal } = opts;
   const aiDir = path.join(cwd, '.ai');
 
   console.error('Syncing .ai/ scaffold…');
@@ -52,11 +51,11 @@ function run(opts) {
   const block = `${BEGIN}\n${instructions}\n${END}`;
   const local = ['CLAUDE.md', 'GEMINI.md', 'AGENTS.md'].map((f) => path.join(cwd, f));
   for (const f of local) resyncBlock(f, block, dry);
-  if (global) {
+  if (isGlobal) {
     for (const tool of ['claude', 'gemini', 'codex']) {
       resyncBlock(globalConfigFile(tool), block, dry);
     }
   }
 }
 
-module.exports = { run, pruneStaleFolders, onlyScaffoldFiles };
+module.exports = { run, pruneStaleFolders, onlyScaffoldFiles, resyncBlock };
