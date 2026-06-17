@@ -7,6 +7,7 @@
   },
   "files": [
     "bin/",
+    "src/",
     "template/",
     "agent-instructions.md",
     "SPEC.md",
@@ -22,6 +23,7 @@
   "scripts": {
     "test": "sh test/install_test.sh",
     "smoke": "node test/smoke.js",
+    "unit": "node test/structure.test.js && node test/dates.test.js && node test/smoke.js && node test/sync.test.js",
     "pack-test": "node test/pack-install.js",
     "prepublishOnly": "npm test"
   },
