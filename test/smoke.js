@@ -109,5 +109,14 @@ check('wire scaffolds no .ai/', !exists(sd, '.ai'));
 // Unknown subcommand fails clearly.
 check('unknown subcommand fails', !run(['bogus'], { cwd: tmp() }).ok);
 
+// New maintenance subcommands are routed (not treated as "unknown command").
+sd = tmp();
+run(['sync'], { cwd: sd });
+check('doctor runs on a scaffold', run(['doctor'], { cwd: sd }).ok);
+// archive with no target is a user error (exit 2), not an unknown-command error.
+check('archive with no target errors cleanly', !run(['archive'], { cwd: sd }).ok);
+// prune on a fresh archive is a no-op success (dry-run default).
+check('prune (dry-run default) exits 0', run(['prune'], { cwd: sd }).ok);
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSMOKE OK');
 process.exit(failures ? 1 : 0);

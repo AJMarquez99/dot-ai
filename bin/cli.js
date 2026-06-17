@@ -25,6 +25,9 @@ Commands:
   init           Scaffold .ai/ and optionally wire agent config (default)
   wire           Inject/update the convention block into agent config only
   sync           Re-apply the latest .ai/ scaffold, prune stale folders, and resync convention blocks
+  doctor         Diagnose the .ai/ structure (read-only)
+  archive        Move a file into archive/ with a YYYY-MM-DD_ prefix
+  prune          Delete archive/ entries past the retention window (dry-run by default)
 
 Tool targets (init/wire):
   --claude       Wire CLAUDE.md
@@ -37,6 +40,9 @@ Options:
   --no-md        (init) Scaffold only: create .ai/ + READMEs, no MD or settings
   --no-plans     Don't set plansDirectory to .ai/plans
   --dry-run      Preview all changes without writing anything
+  --retain       (archive) Mark the archived file _retain (exempt from prune)
+  --force        (prune) Actually delete (prune previews by default)
+  --days N       (prune) Retention window in days (default 90)
   -h, --help     Show this help and exit
   -V, --version  Show version and exit
 
