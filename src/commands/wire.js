@@ -2,9 +2,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const {
-  BEGIN, END, inject, homeDir, globalConfigFile, conventionInstalled, writePlansSetting,
-} = require('../lib/wiring');
+const { BEGIN, END, inject, homeDir, writePlansSetting } = require('../lib/wiring');
 
 // opts: { want:{claude,gemini,codex,global}, instructionsPath, dry, noPlans, wantPlans }
 // Injects the convention block into the selected tools at the chosen scope.
@@ -26,4 +24,4 @@ function run(opts) {
   }
 }
 
-module.exports = { run, conventionInstalled, globalConfigFile };
+module.exports = { run };

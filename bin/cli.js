@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 'use strict';
-const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const pkg = require('../package.json');
@@ -22,7 +21,7 @@ function usage() {
 Commands:
   init           Scaffold .ai/ and optionally wire agent config (default)
   wire           Inject/update the convention block into agent config only
-  sync           Re-apply the latest .ai/ scaffold (additive; reconciles in a later release)
+  sync           Re-apply the latest .ai/ scaffold, prune stale folders, and resync convention blocks
 
 Tool targets (init/wire):
   --claude       Wire CLAUDE.md
@@ -108,6 +107,7 @@ async function runInit(args) {
 
   if (want.global && !want.claude && !want.gemini && !want.codex) {
     console.error('Note: --global has no effect without a tool flag (--claude/--gemini/--codex/--all).');
+    console.error('Re-run with a tool flag to write to the global config.');
   }
 
   // Plans setting: default-yes for flagged/non-interactive; prompt on interactive.
