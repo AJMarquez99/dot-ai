@@ -1,0 +1,40 @@
+# Auto-publish to npm via Trusted Publishing (OIDC) — no NPM_TOKEN, no secret.
+#
+# Pushing a tag matching v* runs this workflow, which mints a short-lived,
+# per-workflow OIDC token (permissions: id-token: write) that npm exchanges for a
+# one-time publish credential. Nothing long-lived is stored anywhere.
+#
+# The trust is configured once on npmjs.com (already done):
+#   package @ajmarquez99/dot-ai -> Settings -> Trusted Publisher -> GitHub Actions
+#   organization/user: AJMarquez99 | repository: dot-ai
+#   workflow filename: release.yml | allowed action: npm publish
+# That trust is keyed to THIS filename — renaming the file breaks publishing until
+# you update the npm-side config to match.
+#
+# To release: bump package.json "version", then push a matching tag:
+#   git tag vX.Y.Z && git push origin vX.Y.Z
+# See .ai/runbooks/releasing.md for the full procedure.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest          # GitHub-hosted runner required (OIDC unsupported on self-hosted)
+    permissions:
+      id-token: write               # mint the OIDC token for trusted publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'        # OIDC trusted publishing needs Node >= 22.14
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@latest   # ensure npm >= 11.5.1 (OIDC support)
+      # dot-ai is dependency-free; `npm test` is the install/parity harness (no npm ci).
+      - run: npm test
+      - run: npm publish --access public  # provenance auto-generated (public repo + public package)
