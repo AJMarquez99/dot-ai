@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -66,11 +66,9 @@ const proj2 = path.join(home2, 'proj');
 fs.mkdirSync(proj2, { recursive: true });
 execFileSync(process.execPath, [CLI, 'sync'], { cwd: proj2, stdio: 'ignore' });
 check('doctor reports an ancestor .ai/ in the cascade', () => {
-  let out;
-  try {
-    out = execFileSync(process.execPath, [CLI, 'doctor'],
-      { cwd: proj2, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOME: home2 } }).toString();
-  } catch (e) { out = ((e.stdout || '') + (e.stderr || '')).toString(); }
+  const res = spawnSync(process.execPath, [CLI, 'doctor'],
+    { cwd: proj2, encoding: 'utf8', env: { ...process.env, HOME: home2 } });
+  const out = (res.stdout || '') + (res.stderr || '');
   assert.ok(out.includes(path.join(home2, '.ai')), 'should mention the ancestor ~/.ai in the cascade');
 });
 

@@ -56,8 +56,8 @@ function run(opts) {
   console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   const chain = cascadeChain(cwd);
   if (chain.length > 1) {
-    console.log('  cascade (broad → specific):');
-    [...chain].reverse().forEach((ai) => console.log(`    - ${ai}`));
+    console.error('  cascade (broad → specific):');
+    [...chain].reverse().forEach((ai) => console.error(`    - ${ai}`));
   }
   if (problems.length === 0) {
     console.error('  ✓ no problems found');
