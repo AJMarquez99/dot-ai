@@ -86,5 +86,27 @@ check('ignores marker-less .ai/ prose', !conventionInstalled(fileWith('## .ai/ P
 check('ignores unrelated config', !conventionInstalled(fileWith('# My CLAUDE.md\n\nBe concise.\n')));
 check('ignores a missing file', !conventionInstalled(path.join(tmp(), 'nope.md')));
 
+// Subcommand surface: `init --no-md` behaves like the legacy bare `--no-md`.
+let sd = tmp();
+check('init --no-md exits 0', run(['init', '--no-md'], { cwd: sd }).ok);
+check('init --no-md creates .ai/README.md', exists(sd, '.ai', 'README.md'));
+
+// `sync` scaffolds additively without touching MD.
+sd = tmp();
+check('sync exits 0', run(['sync'], { cwd: sd }).ok);
+check('sync creates .ai/README.md', exists(sd, '.ai', 'README.md'));
+check('sync writes no CLAUDE.md', !exists(sd, 'CLAUDE.md'));
+
+// `wire` is wiring-only: no .ai/ scaffold, but writes the block.
+sd = tmp();
+const wHome = tmp();
+const wr = run(['wire', '--claude', '--global', '--no-plans'], { cwd: sd, env: { ...process.env, HOME: wHome } });
+check('wire --claude --global exits 0', wr.ok);
+check('wire writes ~/.claude/CLAUDE.md', exists(wHome, '.claude', 'CLAUDE.md'));
+check('wire scaffolds no .ai/', !exists(sd, '.ai'));
+
+// Unknown subcommand fails clearly.
+check('unknown subcommand fails', !run(['bogus'], { cwd: tmp() }).ok);
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSMOKE OK');
 process.exit(failures ? 1 : 0);
