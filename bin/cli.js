@@ -14,8 +14,9 @@ const wireCmd = require('../src/commands/wire');
 const syncCmd = require('../src/commands/sync');
 const archiveCmd = require('../src/commands/archive');
 const pruneCmd = require('../src/commands/prune');
+const doctorCmd = require('../src/commands/doctor');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -184,6 +185,11 @@ async function runPrune(args) {
   pruneCmd.run({ cwd: process.cwd(), force: force && !dryRun, days, dry: !force || dryRun });
 }
 
+async function runDoctor(args) {
+  for (const a of args) { console.error(`Unknown option: ${a}`); process.exit(2); }
+  doctorCmd.run({ cwd: process.cwd() });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -198,6 +204,7 @@ async function main() {
     else if (first === 'sync') return runSync(rest);
     else if (first === 'archive') return runArchive(rest);
     else if (first === 'prune') return runPrune(rest);
+    else if (first === 'doctor') return runDoctor(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
