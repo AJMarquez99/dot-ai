@@ -118,5 +118,13 @@ check('archive with no target errors cleanly', !run(['archive'], { cwd: sd }).ok
 // prune on a fresh archive is a no-op success (dry-run default).
 check('prune (dry-run default) exits 0', run(['prune'], { cwd: sd }).ok);
 
+// init inside an existing ancestor cascade still scaffolds (and notes the ancestor).
+const ancHome = tmp();
+const ancChild = path.join(ancHome, 'child');
+fs.mkdirSync(ancChild, { recursive: true });
+run(['sync'], { cwd: ancHome }); // ancestor .ai/ at ancHome
+const initOut = run(['init', '--no-md'], { cwd: ancChild, env: { ...process.env, HOME: ancHome } });
+check('init nests and still scaffolds under an ancestor .ai/', initOut.ok && exists(ancChild, '.ai', 'README.md'));
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSMOKE OK');
 process.exit(failures ? 1 : 0);
