@@ -25,6 +25,11 @@ function run(opts) {
     console.error(`archive: ${target} is outside ${path.relative(cwd, aiDir) || '.ai'}/`); process.exit(2);
   }
 
+  const relArch = path.relative(path.join(aiDir, 'archive'), abs);
+  if (!relArch.startsWith('..') && !path.isAbsolute(relArch)) {
+    console.error(`archive: ${target} is already inside archive/`); process.exit(2);
+  }
+
   const base = path.basename(abs);
   if (DATED.test(base)) { console.error(`archive: ${base} already has a YYYY-MM-DD_ prefix.`); process.exit(2); }
 
@@ -35,6 +40,11 @@ function run(opts) {
   }
   const dest = path.join(aiDir, 'archive', name);
   const show = (p) => path.relative(cwd, p) || p;
+
+  if (fs.existsSync(dest)) {
+    console.error(`archive: destination already exists: ${path.relative(cwd, dest) || dest}`);
+    process.exit(2);
+  }
 
   if (dry) { console.error(`  would archive: ${show(abs)} -> ${show(dest)}`); return; }
   fs.mkdirSync(path.dirname(dest), { recursive: true });

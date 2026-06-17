@@ -69,5 +69,25 @@ check('archive refuses a missing file', () => {
   assert.ok(!r.ok, 'should exit non-zero');
 });
 
+// Refuses to clobber an existing archived file with the same date+name.
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'plans', 'dup.md'), 'first\n');
+archive(d, ['.ai/plans/dup.md']); // -> 2026-06-14_dup.md
+fs.writeFileSync(path.join(d, '.ai', 'guidelines', 'dup.md'), 'second\n');
+check('archive refuses to clobber an existing archived file', () => {
+  const r = archive(d, ['.ai/guidelines/dup.md']);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.strictEqual(fs.readFileSync(path.join(d, '.ai', 'archive', '2026-06-14_dup.md'), 'utf8'), 'first\n');
+  assert.ok(exists(d, '.ai', 'guidelines', 'dup.md'), 'second source must remain');
+});
+
+// Refuses a target already inside archive/.
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'archive', 'loose.md'), 'x\n');
+check('archive refuses a target already inside archive/', () => {
+  const r = archive(d, ['.ai/archive/loose.md']);
+  assert.ok(!r.ok, 'should exit non-zero');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nARCHIVE OK');
 process.exit(failures ? 1 : 0);
