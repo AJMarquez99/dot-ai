@@ -16,8 +16,9 @@ const archiveCmd = require('../src/commands/archive');
 const pruneCmd = require('../src/commands/prune');
 const doctorCmd = require('../src/commands/doctor');
 const contextCmd = require('../src/commands/context');
+const promoteCmd = require('../src/commands/promote');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor', 'context', 'resolve']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor', 'context', 'resolve', 'promote']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -30,6 +31,7 @@ Commands:
   context        Print the effective .ai/ cascade (alias: resolve)
   archive        Move a file into archive/ with a YYYY-MM-DD_ prefix
   prune          Delete archive/ entries past the retention window (dry-run by default)
+  promote        Copy/move a file to another cascade layer (up|down|global|path)
 
 Tool targets (init/wire):
   --claude       Wire CLAUDE.md
@@ -45,6 +47,8 @@ Options:
   --retain       (archive) Mark the archived file _retain (exempt from prune)
   --force        (prune) Actually delete (prune previews by default)
   --days N       (prune) Retention window in days (default 90)
+  --move, -m     (promote) Move instead of copy
+  --overwrite, -o  (promote) Replace an existing destination
   -h, --help     Show this help and exit
   -V, --version  Show version and exit
 
@@ -203,6 +207,20 @@ async function runContext(args) {
   contextCmd.run({ cwd: process.cwd() });
 }
 
+async function runPromote(args) {
+  let move = false, overwrite = false;
+  const positional = [];
+  for (const a of args) {
+    if (a === '--move' || a === '-m') move = true;
+    else if (a === '--overwrite' || a === '-o') overwrite = true;
+    else if (a.startsWith('--') || (a.startsWith('-') && a.length === 2 && !['-u', '-d', '-g'].includes(a))) {
+      console.error(`Unknown option: ${a}`); process.exit(2);
+    } else positional.push(a);
+  }
+  const [file, target] = positional;
+  promoteCmd.run({ cwd: process.cwd(), file, target, move, overwrite });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -219,6 +237,7 @@ async function main() {
     else if (first === 'prune') return runPrune(rest);
     else if (first === 'doctor') return runDoctor(rest);
     else if (first === 'context' || first === 'resolve') return runContext(rest);
+    else if (first === 'promote') return runPromote(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
