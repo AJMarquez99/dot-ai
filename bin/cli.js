@@ -12,8 +12,9 @@ const wiring = require('../src/lib/wiring');
 const initCmd = require('../src/commands/init');
 const wireCmd = require('../src/commands/wire');
 const syncCmd = require('../src/commands/sync');
+const archiveCmd = require('../src/commands/archive');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -154,6 +155,18 @@ async function runSync(args) {
   console.error('Done.');
 }
 
+async function runArchive(args) {
+  let retain = false, dryRun = false, target = null;
+  for (const a of args) {
+    if (a === '--retain') retain = true;
+    else if (a === '--dry-run') dryRun = true;
+    else if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
+    else if (target === null) target = a;
+    else { console.error(`archive: unexpected extra argument: ${a}`); process.exit(2); }
+  }
+  archiveCmd.run({ cwd: process.cwd(), target, retain, dry: dryRun });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -166,6 +179,7 @@ async function main() {
     if (first === 'init') return runInit(rest);
     else if (first === 'wire') return runWire(rest);
     else if (first === 'sync') return runSync(rest);
+    else if (first === 'archive') return runArchive(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
