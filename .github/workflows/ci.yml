@@ -36,6 +36,7 @@ jobs:
       - run: sh test/install_test.sh
       # cli.js smoke (also the Windows path) — belt and suspenders on Unix.
       - run: node test/smoke.js
+      - run: npm run unit
 
   package:
     name: pack + install round-trip

@@ -11,52 +11,43 @@ plain Markdown that **any** agent (Claude, Gemini, Codex, …) can read.
 
 ## Quickstart
 
-```sh
-# POSIX (macOS/Linux)
-curl -fsSL https://raw.githubusercontent.com/AJMarquez99/dot-ai/main/install.sh | sh
-```
+Install once, globally, then use `dot-ai` in any project:
 
 ```sh
-# Node / cross-platform (works on Windows, no git required)
+npm install -g @ajmarquez99/dot-ai
+dot-ai init        # scaffold .ai/ here (like `git init`)
+```
+
+Prefer not to install? Run it one-off with npx (the original installer flow):
+
+```sh
 npx @ajmarquez99/dot-ai
 ```
 
-> Want the latest unreleased version straight from source? `npx github:AJMarquez99/dot-ai`.
+> Latest unreleased from source: `npm i -g github:AJMarquez99/dot-ai`.
 
-The installer:
-1. Drops a clean `.ai/` into your project (never overwriting existing files).
-2. Asks which agents you use and where to wire the convention — appending a marked block to
-   `CLAUDE.md` / `GEMINI.md` / `AGENTS.md`, never clobbering, and idempotent on re-run.
-3. Offers to point each selected tool's plan mode at `.ai/plans` via its **project-local**
-   settings — Claude (`.claude/settings.local.json` → `plansDirectory`) and Gemini
-   (`.gemini/settings.json` → `general.plan.directory`). Existing settings are merged, never
-   overwritten (needs `jq`, `node`, or `python3`). Codex has no equivalent setting, so it's
-   skipped. Gemini also needs a `~/.gemini/policies` rule to permit writes there — the installer
-   prints a reminder rather than touching your global config.
+## Commands
 
-**Local vs global.** By default the convention block goes into a project-local MD file. Pass
-`--global` to write it into your user-level config instead:
+`dot-ai` is a small command suite (run `dot-ai --help` for flags):
 
-| Tool | Local (default) | Global (`--global`) |
-|---|---|---|
-| Claude | `./CLAUDE.md` | `~/.claude/CLAUDE.md` |
-| Gemini | `./GEMINI.md` | `~/.gemini/GEMINI.md` |
-| Codex  | `./AGENTS.md` | `~/.codex/AGENTS.md` |
+| Command | Does |
+|---|---|
+| `init` | Scaffold `.ai/` and optionally wire agent config (the default action) |
+| `wire` | Inject/update the convention block in `CLAUDE.md`/`GEMINI.md`/`AGENTS.md` |
+| `sync` | Re-apply the latest scaffold, prune stale-empty folders, resync convention blocks |
+| `doctor` | Read-only structure/health diagnosis (and the ancestor cascade) |
+| `archive <file>` | Move a file into `archive/` with a `YYYY-MM-DD_` prefix (`--retain` to exempt from prune) |
+| `prune` | Delete `archive/` entries past the retention window (dry-run by default; `--force` to delete) |
+| `context` | Print the effective `.ai/` cascade for the current directory (alias: `resolve`) |
+| `promote <file> <up\|down\|global\|path>` | Copy (or `--move`) a file to another cascade layer |
 
-`--global` needs at least one tool flag (it only changes *where* the block goes). Codex honors
-`$CODEX_HOME` if set (defaulting to `~/.codex`). The plans-directory setting always stays
-**project-local** even with `--global`, because `.ai/plans` is a per-project path.
+### Nested cascade & global `~/.ai/`
 
-**Scaffold only.** Already have the convention wired in globally? Pass `--no-md` to create just
-the `.ai/` tree and its READMEs — no MD files, no settings touched. (`--no-md` can't be combined
-with a tool flag — `--claude`/`--gemini`/`--codex`/`--all` — or `--global`.)
-
-Non-interactive? Pass targets explicitly: `... | sh -s -- --all` (or `--claude --gemini --codex`),
-add `--global` to target user-level config. The plans setting defaults to on; add `--no-plans` to
-skip it.
-
-Run `dot-ai --help` for all flags, `--version` for the version, and `--dry-run` to preview the
-changes without writing anything.
+`.ai/` directories compose: the effective context is every `.ai/` from your current directory
+up to and including **`~/.ai/`** (the machine-global layer), applied additively — outer is broad,
+inner is specific, nearest wins on a collision. `~/.ai/` is just `.ai/` scaffolded in your home
+directory (`cd ~ && dot-ai init`). Inspect the chain with `dot-ai context`; move files between
+layers with `dot-ai promote`.
 
 ## What you get
 

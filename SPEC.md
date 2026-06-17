@@ -47,3 +47,24 @@ committed, with in-flight scratch kept local via `_`.
   project and wires the convention into your agent's config file(s).
 - **By hand:** copy [`template/.ai/`](./template/.ai) into your project and paste
   [`agent-instructions.md`](./agent-instructions.md) into your `CLAUDE.md` / `GEMINI.md` / `AGENTS.md`.
+
+## Nested cascade & global `~/.ai/`
+
+`.ai/` directories compose. When an agent works in a directory, the **effective context**
+is the chain of every `.ai/` from the current directory up to and including `~/.ai/`
+(the machine-global layer). The chain is **additive** — outer layers are broad, inner
+layers are specific — and on a collision (same folder + same filename) the **nearest
+layer wins**.
+
+```
+~/.ai/                  # machine-global: you, everywhere
+…/workspace/.ai/        # workspace-wide
+…/project/.ai/          # this project (most specific)
+```
+
+`~/.ai/` is not special: it is simply `.ai/` scaffolded in your home directory
+(`cd ~ && dot-ai init`). Project-bound folders (`context/`, `plans/`, `audits/`) are
+inherently per-project and are unusual at broader levels.
+
+Inspect the effective chain with `dot-ai context`; move a file between layers with
+`dot-ai promote`.
