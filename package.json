@@ -1,6 +1,6 @@
 {
   "name": "@ajmarquez99/dot-ai",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "A tiny, tool-agnostic convention for the context you give your coding agents.",
   "bin": {
     "dot-ai": "bin/cli.js"
@@ -23,7 +23,7 @@
   "scripts": {
     "test": "sh test/install_test.sh",
     "smoke": "node test/smoke.js",
-    "unit": "node test/structure.test.js && node test/dates.test.js && node test/root.test.js && node test/smoke.js && node test/sync.test.js && node test/archive.test.js && node test/prune.test.js && node test/doctor.test.js",
+    "unit": "node test/structure.test.js && node test/dates.test.js && node test/root.test.js && node test/smoke.js && node test/sync.test.js && node test/archive.test.js && node test/prune.test.js && node test/doctor.test.js && node test/cascade.test.js && node test/context.test.js && node test/promote.test.js",
     "pack-test": "node test/pack-install.js",
     "prepublishOnly": "npm test"
   },
