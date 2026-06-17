@@ -59,5 +59,20 @@ check('doctor errors when no .ai/ exists', () => {
   assert.ok(!r.ok, 'should exit non-zero');
 });
 
+// Cascade-aware: doctor mentions an ancestor .ai/ when one exists.
+const home2 = tmp();
+fs.mkdirSync(path.join(home2, '.ai'));
+const proj2 = path.join(home2, 'proj');
+fs.mkdirSync(proj2, { recursive: true });
+execFileSync(process.execPath, [CLI, 'sync'], { cwd: proj2, stdio: 'ignore' });
+check('doctor reports an ancestor .ai/ in the cascade', () => {
+  let out;
+  try {
+    out = execFileSync(process.execPath, [CLI, 'doctor'],
+      { cwd: proj2, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOME: home2 } }).toString();
+  } catch (e) { out = ((e.stdout || '') + (e.stderr || '')).toString(); }
+  assert.ok(out.includes(path.join(home2, '.ai')), 'should mention the ancestor ~/.ai in the cascade');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { findRoot } = require('../lib/root');
 const { FOLDERS, isCanonical } = require('../lib/structure');
+const { cascadeChain } = require('../lib/cascade');
 
 // Collect problems with the nearest .ai/ tree (read-only). Returns string[].
 function diagnose(aiDir) {
@@ -53,6 +54,11 @@ function run(opts) {
 
   const problems = diagnose(aiDir);
   console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
+  const chain = cascadeChain(cwd);
+  if (chain.length > 1) {
+    console.log('  cascade (broad → specific):');
+    [...chain].reverse().forEach((ai) => console.log(`    - ${ai}`));
+  }
   if (problems.length === 0) {
     console.error('  ✓ no problems found');
     process.exit(0);
