@@ -55,7 +55,7 @@ function parseFlags(args) {
     else if (a === '--claude') { want.claude = true; anyFlag = true; }
     else if (a === '--gemini') { want.gemini = true; anyFlag = true; }
     else if (a === '--codex') { want.codex = true; anyFlag = true; }
-    else if (a === '--global') { want.global = true; anyFlag = true; }
+    else if (a === '--global') { want.global = true; anyFlag = true; } // --global counts as a flag: suppresses the interactive prompt, matching legacy behavior
     else if (a === '--no-md') { noMd = true; anyFlag = true; }
     else if (a === '--no-plans') { noPlans = true; }
     else if (a === '--dry-run') { dryRun = true; }
@@ -125,7 +125,7 @@ async function runInit(args) {
 }
 
 async function runWire(args) {
-  const { want, anyFlag, noPlans, dryRun } = parseFlags(args);
+  const { want, noPlans, dryRun } = parseFlags(args);
   if (!want.claude && !want.gemini && !want.codex) {
     if (process.stdin.isTTY) await promptForWiring(want);
     if (!want.claude && !want.gemini && !want.codex) {
@@ -160,8 +160,8 @@ async function main() {
   if (first && SUBCOMMANDS.has(first)) {
     const rest = argv.slice(1);
     if (first === 'init') return runInit(rest);
-    if (first === 'wire') return runWire(rest);
-    if (first === 'sync') return runSync(rest);
+    else if (first === 'wire') return runWire(rest);
+    else if (first === 'sync') return runSync(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);

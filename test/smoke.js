@@ -90,6 +90,7 @@ check('ignores a missing file', !conventionInstalled(path.join(tmp(), 'nope.md')
 let sd = tmp();
 check('init --no-md exits 0', run(['init', '--no-md'], { cwd: sd }).ok);
 check('init --no-md creates .ai/README.md', exists(sd, '.ai', 'README.md'));
+check('init --no-md writes no CLAUDE.md', !exists(sd, 'CLAUDE.md'));
 
 // `sync` scaffolds additively without touching MD.
 sd = tmp();
