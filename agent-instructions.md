@@ -84,3 +84,9 @@ At the start of every session, check whether `.ai/` exists in the working direct
 - **Validate the structure:** compare the layout to this canonical structure. If folders are missing,
   misnamed, or files sit in the wrong category, offer to restructure — never restructure silently.
 - **If it does not exist:** offer to scaffold it (omit the optional extension folders until needed).
+
+## Nested cascade
+
+**Nested cascade.** Read every `.ai/` from the working directory up to and including
+`~/.ai/` (the machine-global layer), applying them additively — outer is broad, inner is
+specific, and on a same-folder/same-filename collision the nearest layer wins.

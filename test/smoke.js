@@ -86,5 +86,45 @@ check('ignores marker-less .ai/ prose', !conventionInstalled(fileWith('## .ai/ P
 check('ignores unrelated config', !conventionInstalled(fileWith('# My CLAUDE.md\n\nBe concise.\n')));
 check('ignores a missing file', !conventionInstalled(path.join(tmp(), 'nope.md')));
 
+// Subcommand surface: `init --no-md` behaves like the legacy bare `--no-md`.
+let sd = tmp();
+check('init --no-md exits 0', run(['init', '--no-md'], { cwd: sd }).ok);
+check('init --no-md creates .ai/README.md', exists(sd, '.ai', 'README.md'));
+check('init --no-md writes no CLAUDE.md', !exists(sd, 'CLAUDE.md'));
+
+// `sync` scaffolds additively without touching MD.
+sd = tmp();
+check('sync exits 0', run(['sync'], { cwd: sd }).ok);
+check('sync creates .ai/README.md', exists(sd, '.ai', 'README.md'));
+check('sync writes no CLAUDE.md', !exists(sd, 'CLAUDE.md'));
+
+// `wire` is wiring-only: no .ai/ scaffold, but writes the block.
+sd = tmp();
+const wHome = tmp();
+const wr = run(['wire', '--claude', '--global', '--no-plans'], { cwd: sd, env: { ...process.env, HOME: wHome } });
+check('wire --claude --global exits 0', wr.ok);
+check('wire writes ~/.claude/CLAUDE.md', exists(wHome, '.claude', 'CLAUDE.md'));
+check('wire scaffolds no .ai/', !exists(sd, '.ai'));
+
+// Unknown subcommand fails clearly.
+check('unknown subcommand fails', !run(['bogus'], { cwd: tmp() }).ok);
+
+// New maintenance subcommands are routed (not treated as "unknown command").
+sd = tmp();
+run(['sync'], { cwd: sd });
+check('doctor runs on a scaffold', run(['doctor'], { cwd: sd }).ok);
+// archive with no target is a user error (exit 2), not an unknown-command error.
+check('archive with no target errors cleanly', !run(['archive'], { cwd: sd }).ok);
+// prune on a fresh archive is a no-op success (dry-run default).
+check('prune (dry-run default) exits 0', run(['prune'], { cwd: sd }).ok);
+
+// init inside an existing ancestor cascade still scaffolds (and notes the ancestor).
+const ancHome = tmp();
+const ancChild = path.join(ancHome, 'child');
+fs.mkdirSync(ancChild, { recursive: true });
+run(['sync'], { cwd: ancHome }); // ancestor .ai/ at ancHome
+const initOut = run(['init', '--no-md'], { cwd: ancChild, env: { ...process.env, HOME: ancHome } });
+check('init nests and still scaffolds under an ancestor .ai/', initOut.ok && exists(ancChild, '.ai', 'README.md'));
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSMOKE OK');
 process.exit(failures ? 1 : 0);
