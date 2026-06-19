@@ -2,6 +2,8 @@
 
 **A tiny, tool-agnostic convention for the context you give your coding agents.**
 
+[![npm version](https://img.shields.io/npm/v/@ajmarquez99/dot-ai)](https://www.npmjs.com/package/@ajmarquez99/dot-ai)
+[![CI](https://github.com/AJMarquez99/dot-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AJMarquez99/dot-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Coding agents start every session blind. Your project's domain knowledge, conventions, and
