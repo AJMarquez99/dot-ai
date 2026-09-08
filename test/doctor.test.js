@@ -72,5 +72,50 @@ check('doctor reports an ancestor .ai/ in the cascade', () => {
   assert.ok(out.includes(path.join(home2, '.ai')), 'should mention the ancestor ~/.ai in the cascade');
 });
 
+// --- _* rule: verified against git, not read from a file ---------------------
+function gitInit(dir) {
+  execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+}
+// doctor() above returns execFileSync's stdout, which is 'ignore' — so it cannot
+// observe stderr on a success exit. These checks assert on notes printed when
+// doctor passes, so they need the stream captured either way.
+function doctorErr(cwd) {
+  const r = spawnSync(process.execPath, [CLI, 'doctor'], { cwd, encoding: 'utf8' });
+  return { ok: r.status === 0, stderr: (r.stderr || '') + (r.stdout || '') };
+}
+
+d = tmp(); scaffold(d);
+check('doctor reports a non-repo as a state, not a failure (exit 0)', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, `expected exit 0 outside a repo, got:\n${r.stderr}`);
+  assert.ok(/not a git repository/.test(r.stderr), 'should say the _* rule is inert here');
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+check('doctor verifies the _* rule is actually in force inside a repo', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, `expected exit 0, got:\n${r.stderr}`);
+  assert.ok(/verified in force/.test(r.stderr), 'should confirm git ignores _-prefixed paths');
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.rmSync(path.join(d, '.ai', '.gitignore'));
+check('doctor flags a _* rule that is not in force', () => {
+  const r = doctor(d);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.ok(/NOT in force/.test(r.stderr), 'should report the rule as not in force, not merely missing');
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', '_secret.md'), 'token\n');
+execFileSync('git', ['add', '-f', '.ai/knowledge/_secret.md'], { cwd: d, stdio: 'ignore' });
+check('doctor flags a force-added _-prefixed path that git already tracks', () => {
+  const r = doctor(d);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.ok(/already tracked/.test(r.stderr), 'should name the tracked _-prefixed path');
+  assert.ok(/_secret\.md/.test(r.stderr), 'should name the file');
+  assert.ok(/git rm --cached/.test(r.stderr), 'should hint the git-side fix');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);
