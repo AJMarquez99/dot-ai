@@ -12,8 +12,6 @@ A runbook commonly references a script for its automatable steps.
 
 ## Index
 
-Runbooks are consulted on-task by this index, not auto-loaded.
-
 - **[releasing.md](./releasing.md)** — when cutting and publishing a new version of
   `@ajmarquez99/dot-ai` to npm (version bump, tarball inspection, publish with OTP, tag + release).
 - **[testing.md](./testing.md)** — when running the test suite locally and reading its output

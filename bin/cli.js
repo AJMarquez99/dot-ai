@@ -27,7 +27,7 @@ function usage() {
 Commands:
   init           Scaffold .ai/ and optionally wire agent config (default)
   wire           Inject/update the convention block into agent config only
-  sync           Re-apply the latest .ai/ scaffold, prune stale folders, and resync convention blocks
+  sync           Re-apply the latest .ai/ scaffold, refresh folder README blocks, prune stale folders, and resync convention blocks
   doctor         Diagnose the .ai/ structure (read-only)
   context        Print the effective .ai/ cascade (alias: resolve)
   archive        Move a file into archive/ with a YYYY-MM-DD_ prefix

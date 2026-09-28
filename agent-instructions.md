@@ -77,11 +77,13 @@ One test: **is the content regenerable?**
 
 ## Session-startup behavior
 
-**Load by importance, not everything.** Each folder's `README.md` has an `## Index` — read the
-index, then open only the files the task needs.
+At the start of every session, check whether `.ai/` exists in the working directory. **If none
+exists:** offer to scaffold it (omit the optional extension folders until needed). **If it exists,
+load by importance, not everything** — each folder's `README.md` has an `## Index`; below tier 1,
+read the index, then open only the files the task needs.
 
-1. **Nearest `.ai/`:** read `knowledge/` and `guidelines/` (follow an index's reading order if it
-   gives one).
+1. **Nearest `.ai/`:** read `knowledge/` and `guidelines/` in full (in the index's reading order if
+   it gives one).
 2. **Global `~/.ai/`:** read the `knowledge/` and `guidelines/` indexes; open the entries that bear
    on the task.
 3. **Intermediate layers:** don't load them at startup — consult their indexes when the task
@@ -96,7 +98,6 @@ consulted on-task via its index; `archive/` by filename. Surface `notes/` only i
 
 - **Validate the structure:** compare the layout to this canonical structure. If folders are missing,
   misnamed, or files sit in the wrong category, offer to restructure — never restructure silently.
-- **If it does not exist:** offer to scaffold it (omit the optional extension folders until needed).
 
 ## Folder indexes
 
@@ -120,4 +121,3 @@ index is yours.
 machine-global layer) is available, applied additively — outer is broad, inner is specific, and on
 a same-folder/same-filename collision the nearest layer wins. Available is not loaded: the startup
 tiers above decide what is read.
-
