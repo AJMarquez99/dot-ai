@@ -37,7 +37,7 @@ npx @ajmarquez99/dot-ai
 | `init` | Scaffold `.ai/` and optionally wire agent config (the default action) |
 | `wire` | Inject/update the convention block in `CLAUDE.md`/`GEMINI.md`/`AGENTS.md` |
 | `sync` | Re-apply the latest scaffold, refresh folder README blocks, prune stale-empty folders, resync convention blocks |
-| `doctor` | Read-only structure/health diagnosis (and the ancestor cascade) |
+| `doctor` | Read-only structure/health diagnosis (and the ancestor cascade); asks git whether `_` files are really ignored and flags any already tracked |
 | `archive <file>` | Move a file into `archive/` with a `YYYY-MM-DD_` prefix (`--retain` to exempt from prune) |
 | `prune` | Delete `archive/` entries past the retention window (dry-run by default; `--force` to delete) |
 | `context` | Print the effective `.ai/` cascade for the current directory (alias: `resolve`) |
