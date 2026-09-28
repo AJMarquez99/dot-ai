@@ -17,8 +17,9 @@ const pruneCmd = require('../src/commands/prune');
 const doctorCmd = require('../src/commands/doctor');
 const contextCmd = require('../src/commands/context');
 const promoteCmd = require('../src/commands/promote');
+const indexCmd = require('../src/commands/index');
 
-const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor', 'context', 'resolve', 'promote']);
+const SUBCOMMANDS = new Set(['init', 'wire', 'sync', 'archive', 'prune', 'doctor', 'context', 'resolve', 'promote', 'index']);
 
 function usage() {
   console.log(`Usage: dot-ai [command] [options]
@@ -32,6 +33,7 @@ Commands:
   archive        Move a file into archive/ with a YYYY-MM-DD_ prefix
   prune          Delete archive/ entries past the retention window (dry-run by default)
   promote        Copy/move a file to another cascade layer (up|down|global|path)
+  index          Add missing rows to folders' ## Index tables (never edits existing rows)
 
 Tool targets (init/wire):
   --claude       Wire CLAUDE.md
@@ -49,6 +51,7 @@ Options:
   --days N       (prune) Retention window in days (default 90)
   --move, -m     (promote) Move instead of copy
   --overwrite, -o  (promote) Replace an existing destination
+  --private      (index) Also index _ files into the folder's gitignored _README.md
   -h, --help     Show this help and exit
   -V, --version  Show version and exit
 
@@ -221,6 +224,18 @@ async function runPromote(args) {
   promoteCmd.run({ cwd: process.cwd(), file, target, move, overwrite });
 }
 
+async function runIndex(args) {
+  let dryRun = false, priv = false, folder = null;
+  for (const a of args) {
+    if (a === '--dry-run') dryRun = true;
+    else if (a === '--private') priv = true;
+    else if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
+    else if (folder === null) folder = a;
+    else { console.error(`index: unexpected extra argument: ${a}`); process.exit(2); }
+  }
+  indexCmd.run({ cwd: process.cwd(), templateAiDir: TEMPLATE_AI, folder, private: priv, dry: dryRun });
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('-h') || argv.includes('--help')) { usage(); return; }
@@ -238,6 +253,7 @@ async function main() {
     else if (first === 'doctor') return runDoctor(rest);
     else if (first === 'context' || first === 'resolve') return runContext(rest);
     else if (first === 'promote') return runPromote(rest);
+    else if (first === 'index') return runIndex(rest);
   }
   if (first && !first.startsWith('-')) {
     console.error(`Unknown command: ${first}`);
