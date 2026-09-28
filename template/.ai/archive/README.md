@@ -1,3 +1,4 @@
+<!-- BEGIN .ai-folder -->
 # archive/
 
 **Historical records.** Completed plans, outdated knowledge, superseded guidelines.
@@ -6,3 +7,6 @@
 - **Retention:** permanently deleted after 90 days unless the filename includes `_retain`
   (e.g. `2026-04-01_auth-migration-plan_retain.md`).
 - Review periodically and purge expired items.
+
+**Loading:** not auto-loaded and not indexed — the date-stamped filenames are the index.
+<!-- END .ai-folder -->

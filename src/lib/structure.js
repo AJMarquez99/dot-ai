@@ -17,8 +17,12 @@ const OPTIONAL_FOLDERS = ['skills', 'agents'];
 // contents to a broader level; doctor (Plan 2) flags them at broad levels.
 const PROJECT_BOUND = ['context', 'plans', 'audits'];
 
+// Folders with no ## Index: context/ is disposable session state, archive/ is
+// date-stamped and pruned (its filenames are the index).
+const UNINDEXED = ['context', 'archive'];
+
 function isCanonical(name) {
   return FOLDERS.includes(name) || OPTIONAL_FOLDERS.includes(name);
 }
 
-module.exports = { FOLDERS, OPTIONAL_FOLDERS, PROJECT_BOUND, isCanonical };
+module.exports = { FOLDERS, OPTIONAL_FOLDERS, PROJECT_BOUND, UNINDEXED, isCanonical };
