@@ -42,14 +42,17 @@ npx @ajmarquez99/dot-ai
 | `prune` | Delete `archive/` entries past the retention window (dry-run by default; `--force` to delete) |
 | `context` | Print the effective `.ai/` cascade for the current directory (alias: `resolve`) |
 | `promote <file> <up\|down\|global\|path>` | Copy (or `--move`) a file to another cascade layer |
+| `index [folder]` | Add missing rows to folders' `## Index` tables (`--private` for `_` files; never edits existing rows) |
 
 ### Nested cascade & global `~/.ai/`
 
-`.ai/` directories compose: the effective context is every `.ai/` from your current directory
-up to and including **`~/.ai/`** (the machine-global layer), applied additively — outer is broad,
-inner is specific, nearest wins on a collision. `~/.ai/` is just `.ai/` scaffolded in your home
-directory (`cd ~ && dot-ai init`). Inspect the chain with `dot-ai context`; move files between
-layers with `dot-ai promote`.
+`.ai/` directories compose: every `.ai/` from your current directory up to and including
+**`~/.ai/`** (the machine-global layer) is available, applied additively — outer is broad, inner is
+specific, nearest wins on a collision. Agents don't read it all at startup: they read the nearest
+layer's `knowledge/` and `guidelines/`, the global layer's indexes, and consult everything else on
+demand (see [agent-instructions.md](./agent-instructions.md)). `~/.ai/` is just `.ai/` scaffolded in
+your home directory (`cd ~ && dot-ai init`). Inspect the chain with `dot-ai context`; move files
+between layers with `dot-ai promote`.
 
 ## What you get
 
@@ -76,6 +79,14 @@ version-control rules are in **[SPEC.md](./SPEC.md)**; the exact text your agent
 **Sharing `.ai/` in a public repo?** Commit the scaffold and the files worth sharing; keep personal
 files local by prefixing them with `_` (the shipped `.ai/.gitignore` ignores `_*`). This repo's own
 [`.ai/`](./.ai) is committed exactly this way — browse it as a worked example.
+
+### Folder indexes
+
+Each folder's `README.md` has two parts: a managed block (`<!-- BEGIN .ai-folder -->`) that
+`dot-ai sync` keeps current, and an `## Index` table below it that belongs to you — one row per
+file, saying what it answers. Agents read indexes first and open files on demand, and keep indexes
+current as they work. `dot-ai index` fills in rows for anything unlisted. `_` files stay out of the
+committed index; `dot-ai index --private` lists them in a gitignored `_README.md` instead.
 
 ## How it wires into your agent
 
