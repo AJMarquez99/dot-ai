@@ -77,16 +77,18 @@ function run(opts) {
 
 // Run git, tolerating its absence. status null means git could not be executed.
 function git(args, cwd) {
-  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  if (r.error) return { ok: false, status: null, out: '' };
-  return { ok: true, status: r.status, out: (r.stdout || '').trim() };
+  // C locale: git translates its messages, and diagnoseIgnore matches one.
+  const r = spawnSync('git', args,
+    { cwd, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', LANGUAGE: 'C' } });
+  if (r.error) return { ok: false, status: null, out: '', err: '' };
+  return { ok: true, status: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
 }
 
 // Verify the _* local-prefix rule is actually IN FORCE, rather than merely
 // present as a line in .ai/.gitignore. Reading the line answers "is the rule
 // written down"; the convention's promise is "is this path ignored", and those
-// differ whenever there is no repo, a parent .gitignore negates the rule, or a
-// _-prefixed file was force-added before the rule existed.
+// differ whenever there is no repo, a later line in .ai/.gitignore negates the
+// rule, or a _-prefixed file was force-added before the rule existed.
 //
 // Returns { problems, notes }: `notes` are states worth reporting that are not
 // faults (no repo, no git), `problems` are cases where the promise is broken.
@@ -99,8 +101,20 @@ function diagnoseIgnore(aiDir) {
     notes.push('git not on PATH — could not verify the _* rule is in force');
     return { problems, notes };
   }
-  if (inside.status !== 0 || inside.out !== 'true') {
+  // Only git's own "not a git repository (or any of the parent directories)" (or
+  // being inside .git/, where there is no work tree) means no repo. Any other
+  // failure — a bad GIT_DIR ("not a git repository: '<path>'"), a safe.directory
+  // refusal, a corrupt repo — leaves the question unanswered, and must not be
+  // reported as the all-clear "nothing can be committed".
+  const noRepo = (inside.status === 0 && inside.out === 'false')
+    || (inside.status !== 0 && /not a git repository \(or any (of the )?parent/i.test(inside.err));
+  if (noRepo) {
     notes.push('not a git repository — the _* rule is inert here (nothing can be committed either)');
+    return { problems, notes };
+  }
+  if (inside.status !== 0 || inside.out !== 'true') {
+    const why = inside.err.split('\n')[0];
+    notes.push(`could not verify the _* rule (git rev-parse failed${why ? `: ${why}` : ''})`);
     return { problems, notes };
   }
 
@@ -113,7 +127,7 @@ function diagnoseIgnore(aiDir) {
     notes.push('_* rule verified in force (git ignores _-prefixed paths under .ai/)');
   } else if (ci.status === 1) {
     problems.push('the _* rule is NOT in force — git does not ignore _-prefixed paths under .ai/ '
-      + '(check for a negating rule in a parent .gitignore, or a missing .ai/.gitignore)');
+      + '(check for a later negating line in .ai/.gitignore, or a missing/unreadable .ai/.gitignore)');
   } else {
     notes.push('could not verify the _* rule (git check-ignore did not answer)');
   }

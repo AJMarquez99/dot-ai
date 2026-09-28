@@ -79,8 +79,9 @@ function gitInit(dir) {
 // doctor() above returns execFileSync's stdout, which is 'ignore' — so it cannot
 // observe stderr on a success exit. These checks assert on notes printed when
 // doctor passes, so they need the stream captured either way.
-function doctorErr(cwd) {
-  const r = spawnSync(process.execPath, [CLI, 'doctor'], { cwd, encoding: 'utf8' });
+function doctorErr(cwd, env) {
+  const r = spawnSync(process.execPath, [CLI, 'doctor'],
+    { cwd, encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env });
   return { ok: r.status === 0, stderr: (r.stderr || '') + (r.stdout || '') };
 }
 
@@ -115,6 +116,25 @@ check('doctor flags a force-added _-prefixed path that git already tracks', () =
   assert.ok(/already tracked/.test(r.stderr), 'should name the tracked _-prefixed path');
   assert.ok(/_secret\.md/.test(r.stderr), 'should name the file');
   assert.ok(/git rm --cached/.test(r.stderr), 'should hint the git-side fix');
+});
+
+// A git error is not "no repository": reporting it as one repeats the false
+// all-clear this check exists to remove.
+d = tmp(); gitInit(d); scaffold(d);
+check('doctor reports a git error as unverifiable, not as a non-repo', () => {
+  const r = doctorErr(d, { GIT_DIR: path.join(d, 'nonexistent', '.git') });
+  assert.ok(!/not a git repository —/.test(r.stderr), `must not claim a non-repo:\n${r.stderr}`);
+  assert.ok(/could not verify the _\* rule/.test(r.stderr), `should say it could not verify:\n${r.stderr}`);
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.appendFileSync(path.join(d, '.ai', '.gitignore'), '!_*\n');
+check('doctor names a later negating line in .ai/.gitignore as the cause', () => {
+  const r = doctor(d);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.ok(/NOT in force/.test(r.stderr), r.stderr);
+  assert.ok(/later negating line in \.ai\/\.gitignore/.test(r.stderr), `should point at .ai/.gitignore:\n${r.stderr}`);
+  assert.ok(!/parent \.gitignore/.test(r.stderr), 'a parent .gitignore cannot override .ai/.gitignore');
 });
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
