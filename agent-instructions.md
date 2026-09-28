@@ -77,16 +77,47 @@ One test: **is the content regenerable?**
 
 ## Session-startup behavior
 
-At the start of every session, check whether `.ai/` exists in the working directory:
-- **If it exists:** read `knowledge/`, `guidelines/`, `lessons/`, and `context/` before proceeding.
-  Do NOT auto-load `runbooks/` (consult on-task via their index), `scripts/`, `templates/`, `data/`,
-  `plans/`, `audits/`, or `archive/`. Surface `notes/` only if relevant to the task.
+At the start of every session, check whether `.ai/` exists in the working directory. **If none
+exists:** offer to scaffold it (omit the optional extension folders until needed). **If it exists,
+load by importance, not everything** — each folder's `README.md` has an `## Index`; below tier 1,
+read the index, then open only the files the task needs.
+
+1. **Nearest `.ai/`:** read `knowledge/` and `guidelines/` in full (in the index's reading order if
+   it gives one).
+2. **Global `~/.ai/`:** read the `knowledge/` and `guidelines/` indexes; open the entries that bear
+   on the task.
+3. **Intermediate layers:** don't load them at startup — consult their indexes when the task
+   reaches that scope.
+4. **`context/`:** nearest layer only, and only when continuing prior work; skip it on a fresh start.
+5. **`lessons/`:** only when stuck (an error, a correction, a repeated failure) — check the nearest
+   layer, then global. When a lesson applies, propose promoting it into its `guidelines/` or
+   `knowledge/` home, then delete the lesson.
+
+Everything else — `runbooks/`, `plans/`, `audits/`, `notes/`, `templates/`, `scripts/`, `data/` — is
+consulted on-task via its index; `archive/` by filename. Surface `notes/` only if relevant.
+
 - **Validate the structure:** compare the layout to this canonical structure. If folders are missing,
   misnamed, or files sit in the wrong category, offer to restructure — never restructure silently.
-- **If it does not exist:** offer to scaffold it (omit the optional extension folders until needed).
+
+## Folder indexes
+
+Every folder except `context/` and `archive/` has an `## Index` in its `README.md`: a
+`| File | Answers |` table with one row per top-level file or subfolder. The convention-owned text
+above it sits between `<!-- BEGIN .ai-folder -->` markers and is refreshed by `dot-ai sync`; the
+index is yours.
+
+- **Maintain indexes as you work, without being asked.** When you create, rename, move, promote, or
+  archive a file under `.ai/`, update that folder's index in the same change. If a folder has files
+  but no index, add one; start new folders from `templates/folder-README.md`. The user may also ask
+  you to reindex a folder or layer — do it the same way.
+- **Never list `_` files in `README.md`** — it is committed. Index them in the folder's gitignored
+  `_README.md` only if one exists or the user asks for one. When reading an index, also read
+  `_README.md` if present.
+- `dot-ai index` adds rows for unlisted files (`TODO: describe`); you write the "Answers" text.
 
 ## Nested cascade
 
-**Nested cascade.** Read every `.ai/` from the working directory up to and including
-`~/.ai/` (the machine-global layer), applying them additively — outer is broad, inner is
-specific, and on a same-folder/same-filename collision the nearest layer wins.
+**Nested cascade.** Every `.ai/` from the working directory up to and including `~/.ai/` (the
+machine-global layer) is available, applied additively — outer is broad, inner is specific, and on
+a same-folder/same-filename collision the nearest layer wins. Available is not loaded: the startup
+tiers above decide what is read.

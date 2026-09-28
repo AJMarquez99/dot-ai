@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -95,6 +95,88 @@ check('sync --global resyncs the home block', () => {
   const txt = fs.readFileSync(claudeGlobal, 'utf8');
   assert.ok(!txt.includes('OLD'), 'home block should be resynced');
   assert.ok(txt.match(/BEGIN \.ai-convention/g).length === 1, 'no duplicate');
+});
+
+// Folder README managed blocks.
+const TPL_DIR = path.join(__dirname, '..', 'template', '.ai');
+const tplReadme = (f) => fs.readFileSync(path.join(TPL_DIR, f, 'README.md'), 'utf8');
+const legacyReadme = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'legacy-readmes', `${f}.md`), 'utf8');
+const readme = (dir, f) => path.join(dir, '.ai', f, 'README.md');
+const seed = (dir, f, text) => {
+  fs.mkdirSync(path.join(dir, '.ai', f), { recursive: true });
+  fs.writeFileSync(readme(dir, f), text);
+};
+
+d = tmp();
+runSync(d);
+check('fresh sync writes the current template READMEs', () => {
+  assert.strictEqual(fs.readFileSync(readme(d, 'knowledge'), 'utf8'), tplReadme('knowledge'));
+});
+
+d = tmp();
+seed(d, 'knowledge', legacyReadme('knowledge'));
+runSync(d);
+check('sync migrates a pristine v1.0.0 README to the managed template', () => {
+  assert.strictEqual(fs.readFileSync(readme(d, 'knowledge'), 'utf8'), tplReadme('knowledge'));
+});
+
+d = tmp();
+seed(d, 'knowledge', `${legacyReadme('knowledge')}\n## Index\n\n| File | Answers |\n|---|---|\n| [a.md](a.md) | mine |\n`);
+runSync(d);
+check('migration keeps an existing index below the block', () => {
+  const t = fs.readFileSync(readme(d, 'knowledge'), 'utf8');
+  assert.ok(t.startsWith('<!-- BEGIN .ai-folder -->'), t);
+  assert.ok(t.includes('| [a.md](a.md) | mine |'));
+  assert.ok(!t.includes('Auto-loaded at session start'));
+});
+
+d = tmp();
+runSync(d);
+fs.writeFileSync(readme(d, 'guidelines'),
+  fs.readFileSync(readme(d, 'guidelines'), 'utf8').replace('**Loading:**', 'STALE') + '| [g.md](g.md) | mine |\n');
+runSync(d);
+check('sync refreshes a stale block and keeps rows outside it', () => {
+  const t = fs.readFileSync(readme(d, 'guidelines'), 'utf8');
+  assert.ok(!t.includes('STALE') && t.includes('**Loading:**'));
+  assert.ok(t.includes('| [g.md](g.md) | mine |'));
+});
+
+d = tmp();
+const custom = '# guidelines/\n\nMy own intro — hand-written.\n';
+seed(d, 'guidelines', custom);
+const res = spawnSync(process.execPath, [CLI, 'sync'], { cwd: d, encoding: 'utf8' });
+check('sync leaves a customized README untouched and reports it', () => {
+  assert.strictEqual(res.status, 0, res.stderr);
+  assert.strictEqual(fs.readFileSync(readme(d, 'guidelines'), 'utf8'), custom);
+  assert.ok(res.stderr.includes('skip (customized README, no managed block)'), res.stderr);
+});
+
+d = tmp();
+seed(d, 'guidelines', 'My banner\n\n<!-- BEGIN .ai-folder -->\nOLD\n<!-- END .ai-folder -->\n');
+runSync(d);
+check('sync refreshes a stale block preceded by user prose, keeping the prose', () => {
+  const t = fs.readFileSync(readme(d, 'guidelines'), 'utf8');
+  assert.ok(t.startsWith('My banner\n\n'), t);
+  assert.ok(!t.includes('OLD'), t);
+  assert.ok(t.includes('<!-- BEGIN .ai-folder -->'), t);
+});
+
+d = tmp();
+seed(d, 'knowledge', legacyReadme('knowledge'));
+runSync(d);
+const snap = (dir) => fs.readdirSync(path.join(dir, '.ai')).filter((f) => fs.existsSync(readme(dir, f)))
+  .map((f) => fs.readFileSync(readme(dir, f), 'utf8')).join('\0');
+const first = snap(d);
+runSync(d);
+check('second sync is a no-op for READMEs (idempotent)', () => {
+  assert.strictEqual(snap(d), first);
+});
+
+d = tmp();
+seed(d, 'knowledge', legacyReadme('knowledge'));
+runSync(d, ['--dry-run']);
+check('sync --dry-run does not rewrite READMEs', () => {
+  assert.strictEqual(fs.readFileSync(readme(d, 'knowledge'), 'utf8'), legacyReadme('knowledge'));
 });
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSYNC OK');

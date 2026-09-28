@@ -1,14 +1,16 @@
+<!-- BEGIN .ai-folder -->
 # runbooks/
 
 **Answers: HOW an operational task is performed (with judgment).** Procedures that include judgment
-calls ("if X looks wrong, stop"). Indexed and consulted on-task — **not** auto-loaded.
+calls ("if X looks wrong, stop").
 
 Distinct from `scripts/` (deterministic automation that runs) and the optional `skills/` (LLM-invoked).
 A runbook commonly references a script for its automatable steps.
 
-## Index
+**Loading:** consulted on-task via this index — not auto-loaded.
+<!-- END .ai-folder -->
 
-Runbooks are consulted on-task by this index, not auto-loaded.
+## Index
 
 - **[releasing.md](./releasing.md)** — when cutting and publishing a new version of
   `@ajmarquez99/dot-ai` to npm (version bump, tarball inspection, publish with OTP, tag + release).
