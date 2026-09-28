@@ -38,6 +38,11 @@ check('templates/folder-README.md is a managed block plus an empty index', () =>
   assert.ok(fr.extractBlock(t).includes('**Loading:**'));
   assert.ok(t.endsWith(`${fr.FOLDER_END}\n\n${INDEX_HEADER}`));
 });
+check('templates/folder-README.md has exactly one BEGIN and one END marker', () => {
+  const t = read('templates', 'folder-README.md');
+  assert.strictEqual(t.split(fr.FOLDER_BEGIN).length - 1, 1);
+  assert.strictEqual(t.split(fr.FOLDER_END).length - 1, 1);
+});
 check('templates/README.md indexes folder-README.md', () => {
   assert.ok(read('templates', 'README.md').includes('| [folder-README.md](folder-README.md) |'));
 });

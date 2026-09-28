@@ -33,8 +33,11 @@ function indexFolder(aiDir, name, templateAiDir, opts) {
   const dir = path.join(aiDir, name);
   const { pub, priv } = idx.listEntries(dir);
   const own = path.join(templateAiDir, name, 'README.md');
-  const seedPath = fs.existsSync(own) ? own : path.join(templateAiDir, 'templates', 'folder-README.md');
-  updateIndexFile(dir, path.join(dir, 'README.md'), fs.readFileSync(seedPath, 'utf8'), pub, true, opts.dry);
+  const usingOwn = fs.existsSync(own);
+  const seedPath = usingOwn ? own : path.join(templateAiDir, 'templates', 'folder-README.md');
+  let seed = fs.readFileSync(seedPath, 'utf8');
+  if (!usingOwn) seed = seed.replace('# <folder>/', `# ${name}/`);
+  updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, true, opts.dry);
   const privFile = path.join(dir, '_README.md');
   if (opts.private || fs.existsSync(privFile)) {
     updateIndexFile(dir, privFile, idx.privateSeed(), priv, false, opts.dry);
@@ -50,7 +53,9 @@ function run(opts) {
   let names;
   if (opts.folder) {
     const f = opts.folder.replace(/[\\/]+$/, '');
-    if (path.isAbsolute(f) || f.split(/[\\/]/).includes('..')) fail(`folder must be a name inside .ai/: ${opts.folder}`);
+    if (f === '' || f === '.' || /[\\/]/.test(f) || f.split(/[\\/]/).includes('..')) {
+      fail(`folder must be a single folder name inside .ai/: ${opts.folder}`);
+    }
     if (UNINDEXED.includes(f)) fail(`${f}/ is not indexed (disposable or date-stamped).`);
     const full = path.join(aiDir, f);
     if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) fail(`no such folder: ${f}/`);

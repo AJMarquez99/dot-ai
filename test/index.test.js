@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
+const idx = require('../src/lib/index-section');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -152,6 +153,87 @@ check('exit 2 for a path that escapes .ai/', () => {
   assert.strictEqual(index(d, [path.join(d, '.ai', 'knowledge')]).code, 2);
 });
 check('exit 2 for an unknown option', () => assert.strictEqual(index(d, ['--bogus']).code, 2));
+
+// --- folder argument must be a single folder name (finding 1)
+d = tmp(); scaffold(d);
+put(K(d, 'design', 'x.md'));
+{
+  const topReadme = path.join(d, '.ai', 'README.md');
+  const ctxReadme = path.join(d, '.ai', 'context', 'README.md');
+  const knowReadme = K(d, 'README.md');
+  const beforeTop = fs.existsSync(topReadme) ? read(topReadme) : null;
+  const beforeCtx = read(ctxReadme);
+  const beforeKnow = read(knowReadme);
+  for (const bad of ['.', './context', 'context/foo', 'knowledge/design']) {
+    check(`exit 2 and nothing written for folder arg "${bad}"`, () => {
+      const r2 = index(d, [bad]);
+      assert.strictEqual(r2.code, 2, r2.err);
+      assert.ok(r2.err.includes(`folder must be a single folder name inside .ai/: ${bad}`), r2.err);
+      assert.strictEqual(fs.existsSync(topReadme) ? read(topReadme) : null, beforeTop, 'top .ai/README.md unchanged');
+      assert.strictEqual(read(ctxReadme), beforeCtx, '.ai/context/README.md unchanged');
+      assert.strictEqual(read(knowReadme), beforeKnow, '.ai/knowledge/README.md unchanged');
+      assert.ok(!fs.existsSync(path.join(d, '.ai', 'context', 'foo', 'README.md')), 'no .ai/context/foo/README.md');
+      assert.ok(!fs.existsSync(K(d, 'design', 'README.md')), 'no .ai/knowledge/design/README.md');
+    });
+  }
+}
+
+// --- seeded README substitutes the real folder name for the template's literal <folder> (finding 4)
+d = tmp(); scaffold(d);
+fs.mkdirSync(path.join(d, '.ai', 'skills'), { recursive: true });
+put(path.join(d, '.ai', 'skills', 'a.md'));
+index(d, ['skills']);
+check('seeding an optional folder with no own template substitutes its name in the heading', () => {
+  const t = read(path.join(d, '.ai', 'skills', 'README.md'));
+  assert.ok(t.startsWith('<!-- BEGIN .ai-folder -->\n# skills/'), t);
+  assert.ok(!t.includes('<folder>'), t);
+});
+
+// --- ## Index heading with a suffix is recognized, never duplicated (finding 5)
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\n\n## Index (hand-written)\n\n| File | Answers |\n|---|---|\n| [a.md](a.md) | mine |\n');
+put(K(d, 'a.md')); put(K(d, 'b.md'));
+index(d, ['knowledge']);
+check('## Index with a suffix still gets rows added under it', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [b.md](b.md) | TODO: describe |'), t);
+});
+check('## Index with a suffix never gets a second Index section', () => {
+  const t = read(K(d, 'README.md'));
+  assert.strictEqual((t.match(/^## Index/gm) || []).length, 1, t);
+});
+check('## Indexing is not mistaken for an Index heading', () => {
+  assert.strictEqual(idx.findSection('## Indexing\n\nprose\n'), null);
+});
+
+// --- test gaps (finding 6)
+d = tmp(); scaffold(d);
+put(K(d, 'x.md')); put(K(d, '_y.md'));
+index(d, ['--private']);
+index(d, ['--private']);
+check('_README.md stays idempotent across repeated --private runs', () => {
+  const t = read(K(d, '_README.md'));
+  assert.strictEqual((t.match(/^\| \[_y\.md\]/gm) || []).length, 1, t);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\n\n## Index\n| File | Answers |\n|---|---|\n| [a.md](a.md) | mine |\nSome trailing prose.\n');
+put(K(d, 'a.md')); put(K(d, 'b.md'));
+index(d, ['knowledge']);
+check('a table followed by prose (no blank line) gets new rows before the prose, with a blank line between', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [b.md](b.md) | TODO: describe |\n\nSome trailing prose.'), t);
+});
+
+d = tmp(); scaffold(d);
+fs.rmSync(K(d, 'README.md'));
+put(K(d, 'a.md'));
+r = index(d, ['knowledge', '--dry-run']);
+check('--dry-run on a missing README prints "would create" and creates nothing', () => {
+  assert.strictEqual(r.code, 0, r.err);
+  assert.ok(r.err.includes('would create'), r.err);
+  assert.ok(!fs.existsSync(K(d, 'README.md')));
+});
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);

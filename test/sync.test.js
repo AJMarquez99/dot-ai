@@ -146,8 +146,19 @@ const custom = '# guidelines/\n\nMy own intro — hand-written.\n';
 seed(d, 'guidelines', custom);
 const res = spawnSync(process.execPath, [CLI, 'sync'], { cwd: d, encoding: 'utf8' });
 check('sync leaves a customized README untouched and reports it', () => {
+  assert.strictEqual(res.status, 0, res.stderr);
   assert.strictEqual(fs.readFileSync(readme(d, 'guidelines'), 'utf8'), custom);
   assert.ok(res.stderr.includes('skip (customized README, no managed block)'), res.stderr);
+});
+
+d = tmp();
+seed(d, 'guidelines', 'My banner\n\n<!-- BEGIN .ai-folder -->\nOLD\n<!-- END .ai-folder -->\n');
+runSync(d);
+check('sync refreshes a stale block preceded by user prose, keeping the prose', () => {
+  const t = fs.readFileSync(readme(d, 'guidelines'), 'utf8');
+  assert.ok(t.startsWith('My banner\n\n'), t);
+  assert.ok(!t.includes('OLD'), t);
+  assert.ok(t.includes('<!-- BEGIN .ai-folder -->'), t);
 });
 
 d = tmp();

@@ -4,7 +4,7 @@ const fs = require('fs');
 
 // A folder's "## Index" section in its README: a `| File | Answers |` table (the
 // standard) or, in hand-written READMEs, a bullet list. We only ever ADD entries.
-const HEADING_RE = /^## Index[ \t]*$/m;
+const HEADING_RE = /^## Index\b.*$/m;
 const SEP_RE = /^\|[\s:|-]+$/;
 const LINK_RE = /\]\(([^)\s]+)\)/;
 const TICK_RE = /`([^`]+)`/;
