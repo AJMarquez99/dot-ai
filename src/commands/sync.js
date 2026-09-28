@@ -5,6 +5,7 @@ const path = require('path');
 const { copyTree } = require('../lib/scaffold');
 const { isCanonical } = require('../lib/structure');
 const { BEGIN, END, inject, globalConfigFile, conventionInstalled } = require('../lib/wiring');
+const { refreshReadme } = require('../lib/folder-readme');
 
 // True if a folder has no user content — it holds at most README.md and/or .gitignore
 // (an empty folder also qualifies). Such folders are safe to prune.
@@ -37,6 +38,17 @@ function resyncBlock(file, block, dry) {
   inject(file, block, dry);                 // delegates the BEGIN..END replace to wiring.inject
 }
 
+// Refresh the .ai-folder block in each existing folder README from the template
+// (migrating unmodified v1.0.0 READMEs; customized ones are reported and skipped).
+function refreshFolderReadmes(templateAiDir, aiDir, dry) {
+  for (const entry of fs.readdirSync(templateAiDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const tpl = path.join(templateAiDir, entry.name, 'README.md');
+    if (!fs.existsSync(tpl)) continue;
+    refreshReadme(path.join(aiDir, entry.name, 'README.md'), tpl, entry.name, dry);
+  }
+}
+
 // opts: { cwd, templateAiDir, instructionsPath, dry, global }
 function run(opts) {
   const { cwd, templateAiDir, instructionsPath, dry, global: isGlobal } = opts;
@@ -44,6 +56,7 @@ function run(opts) {
 
   console.error('Syncing .ai/ scaffold…');
   copyTree(templateAiDir, aiDir, dry);     // additive
+  refreshFolderReadmes(templateAiDir, aiDir, dry); // managed README blocks
   pruneStaleFolders(aiDir, dry);           // reconcile (safe removals)
 
   // Resync existing convention blocks to the latest agent-instructions.md.

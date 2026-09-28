@@ -50,11 +50,12 @@ committed, with in-flight scratch kept local via `_`.
 
 ## Nested cascade & global `~/.ai/`
 
-`.ai/` directories compose. When an agent works in a directory, the **effective context**
-is the chain of every `.ai/` from the current directory up to and including `~/.ai/`
-(the machine-global layer). The chain is **additive** — outer layers are broad, inner
-layers are specific — and on a collision (same folder + same filename) the **nearest
-layer wins**.
+`.ai/` directories compose. When an agent works in a directory, every `.ai/` from the current
+directory up to and including `~/.ai/` (the machine-global layer) is **available**. The chain is
+**additive** — outer layers are broad, inner layers are specific — and on a collision (same folder +
+same filename) the **nearest layer wins**. Available is not loaded: agents read the nearest layer's
+`knowledge/` and `guidelines/` at startup, the global layer through its folder indexes, and
+everything else on demand (tiers in [`agent-instructions.md`](./agent-instructions.md)).
 
 ```
 ~/.ai/                  # machine-global: you, everywhere
