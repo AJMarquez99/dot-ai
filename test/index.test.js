@@ -317,7 +317,15 @@ d = tmp(); scaffold(d);
 {
   const realTemplateAiDir = path.join(__dirname, '..', 'template', '.ai');
   const crlfTemplateAiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-tpl-crlf-'));
-  fs.cpSync(realTemplateAiDir, crlfTemplateAiDir, { recursive: true });
+  // Recursive copy without fs.cpSync (Node >=16.7) — the package floor is Node 14.
+  const copyDir = (s, t) => {
+    fs.mkdirSync(t, { recursive: true });
+    for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+      const a = path.join(s, e.name), b = path.join(t, e.name);
+      if (e.isDirectory()) copyDir(a, b); else fs.copyFileSync(a, b);
+    }
+  };
+  copyDir(realTemplateAiDir, crlfTemplateAiDir);
   const seedPath = path.join(crlfTemplateAiDir, 'templates', 'folder-README.md');
   fs.writeFileSync(seedPath, fs.readFileSync(seedPath, 'utf8').replace(/\n/g, '\r\n'));
   fs.mkdirSync(path.join(d, '.ai', 'skills'), { recursive: true });
