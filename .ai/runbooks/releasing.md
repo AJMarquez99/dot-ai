@@ -97,8 +97,14 @@ commit and push only the tag:
 git fetch origin
 git tag vX.Y.Z <main merge commit sha>
 git push origin vX.Y.Z
-gh run watch "$(gh run list --workflow release.yml --branch vX.Y.Z --limit 1 --json databaseId -q '.[0].databaseId')"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  id=$(gh run list --workflow release.yml --branch vX.Y.Z --limit 1 --json databaseId -q '.[0].databaseId')
+  [ -n "$id" ] && break; sleep 3
+done
+gh run watch "$id"
 ```
+
+The run can take a few seconds to register after the tag push, hence the retry loop.
 
 The **Release** workflow runs `npm test`, `npm publish --access public` (OIDC, provenance), and
 then creates the GitHub Release with generated notes. Never move a published tag.
