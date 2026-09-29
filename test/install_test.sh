@@ -462,20 +462,48 @@ inject_newline_parity_case() {
   pass "inject newline parity (no trailing newline)"
 }
 
-# Guard the npm trap: npm renames .gitignore -> .npmignore on install, so the
-# template must ship its ignore files as `gitignore` (no dot), never `.gitignore`.
 # init inside a .ai/ layer is refused and creates no nested .ai/.ai (#15).
 inside_ai_case() {
   name="$1"; shift; runner="$1"; shift
-  work=$(mktemp -d); mkdir -p "$work/.ai"; cd "$work/.ai"
-  rc=0; $runner --no-md >"$work/out" 2>&1 || rc=$?
+  work=$(mktemp -d); mkdir -p "$work/.ai"
+  rc=0
+  ( cd "$work/.ai" && $runner --no-md >"$work/out" 2>&1 ) || rc=$?
   [ "$rc" -eq 2 ] || fail "$name: init inside .ai/ exited $rc, want 2"
   grep -qF "inside a .ai/ layer" "$work/out" || fail "$name: no inside-.ai/ message"
   [ -e "$work/.ai/.ai" ] && fail "$name: created nested .ai/.ai"
-  cd /; rm -rf "$work"
+  rm -rf "$work"
   pass "$name (inside .ai/ refused)"
 }
 
+# A symlink either side of the cwd must not let init/sync past the .ai/ guard:
+# (a) the LOGICAL cwd ends in .ai via a symlink but the physical target doesn't;
+# (b) the PHYSICAL cwd is a real .ai/ but it's reached via a non-.ai symlink name.
+inside_ai_symlink_case() {
+  name="$1"; shift; runner="$1"; shift
+
+  work=$(mktemp -d); mkdir -p "$work/real"
+  ln -s "$work/real" "$work/.ai"
+  rc=0
+  ( cd "$work/.ai" && $runner --no-md >"$work/out-a" 2>&1 ) || rc=$?
+  [ "$rc" -eq 2 ] || fail "$name: symlinked (logical .ai) exited $rc, want 2"
+  grep -qF "inside a .ai/ layer" "$work/out-a" || fail "$name: no inside-.ai/ message (logical .ai)"
+  [ -e "$work/real/.ai" ] && fail "$name: created nested .ai under the real symlink target"
+  rm -rf "$work"
+
+  work=$(mktemp -d); mkdir -p "$work/.ai"
+  ln -s "$work/.ai" "$work/alias"
+  rc=0
+  ( cd "$work/alias" && $runner --no-md >"$work/out-b" 2>&1 ) || rc=$?
+  [ "$rc" -eq 2 ] || fail "$name: symlinked (physical .ai) exited $rc, want 2"
+  grep -qF "inside a .ai/ layer" "$work/out-b" || fail "$name: no inside-.ai/ message (physical .ai)"
+  [ -e "$work/.ai/.ai" ] && fail "$name: created nested .ai/.ai via alias symlink"
+  rm -rf "$work"
+
+  pass "$name (symlinked .ai/ refused both directions)"
+}
+
+# Guard the npm trap: npm renames .gitignore -> .npmignore on install, so the
+# template must ship its ignore files as `gitignore` (no dot), never `.gitignore`.
 template_ignore_naming_case() {
   bad=$(cd "$REPO_ROOT" && find template -name '.gitignore' -o -name '.npmignore')
   [ -z "$bad" ] || fail "template ships a dotted ignore file npm will mangle: $bad"
@@ -537,4 +565,6 @@ end_cr_space_parity_case
 inject_newline_parity_case
 inside_ai_case "install.sh" "sh $REPO_ROOT/install.sh"
 inside_ai_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+inside_ai_symlink_case "install.sh" "sh $REPO_ROOT/install.sh"
+inside_ai_symlink_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

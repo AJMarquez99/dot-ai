@@ -145,5 +145,14 @@ check('doctor flags a nested .ai/.ai/', () => {
   assert.ok(/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
 });
 
+d = tmp(); scaffold(d);
+fs.mkdirSync(path.join(d, '.ai', '.ai'), { recursive: true });
+check('doctor reports an empty nested .ai/.ai/ once, not also as a stale folder', () => {
+  const r = doctor(d);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.ok(/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
+  assert.ok(!/stale folder \(sync-removable\): \.ai\//.test(r.stderr), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

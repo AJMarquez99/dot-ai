@@ -87,9 +87,13 @@ if [ "$NO_MD" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [
 fi
 
 # Running inside a .ai/ layer (e.g. ~/.ai) would scaffold a nested .ai/.ai/.
-case "$(basename -- "$PWD")" in
-  .ai) log "Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~)."; exit 2 ;;
-esac
+# Check both the logical cwd ($PWD) and the physical cwd (pwd -P, symlinks
+# resolved) so a symlink in either direction can't sneak past the guard.
+for _d in "$PWD" "$(pwd -P)"; do
+  case "$(basename -- "$_d")" in
+    .ai) log "Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~)."; exit 2 ;;
+  esac
+done
 
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"

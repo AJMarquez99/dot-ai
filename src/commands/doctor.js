@@ -37,7 +37,7 @@ function diagnose(aiDir) {
   for (const name of fs.readdirSync(aiDir)) {
     const full = path.join(aiDir, name);
     if (!fs.statSync(full).isDirectory()) continue;
-    if (name.startsWith('_') || isCanonical(name)) continue;
+    if (name.startsWith('_') || isCanonical(name) || name === '.ai') continue;
     const entries = fs.readdirSync(full);
     if (entries.every((e) => e === 'README.md' || e === '.gitignore')) {
       problems.push(`stale folder (sync-removable): ${name}/`);
