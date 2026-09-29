@@ -47,10 +47,32 @@ function diagnose(aiDir) {
     }
   }
 
-  // 6. A nested .ai/.ai/ — from running init/sync inside the layer (pre-1.1.2).
-  if (has('.ai')) problems.push('nested .ai/.ai/ found — likely from running init/sync inside .ai/; move its contents up and remove it');
+  // 6. A nested .ai/.ai — a dir from running init/sync inside the layer (pre-1.1.2), or a stray file.
+  if (has('.ai')) {
+    problems.push(fs.statSync(path.join(aiDir, '.ai')).isDirectory()
+      ? 'nested .ai/.ai/ found — likely from running init/sync inside .ai/; move its contents up and remove it'
+      : 'stray file .ai/.ai inside the layer — remove it');
+  }
 
   return problems;
+}
+
+// A layer holding nothing but plans/ — typically created by a relative
+// plansDirectory in user-level agent settings when a session starts in a
+// directory with no scaffold. Returns null, or { files } in plans/.
+function plansOnly(aiDir) {
+  let entries;
+  try { entries = fs.readdirSync(aiDir).filter((e) => e !== '.DS_Store'); } catch { return null; }
+  if (entries.length !== 1 || entries[0] !== 'plans') return null;
+  const plans = path.join(aiDir, 'plans');
+  if (!fs.statSync(plans).isDirectory()) return null;
+  return { files: fs.readdirSync(plans).filter((e) => e !== '.DS_Store').length };
+}
+
+function plansOnlyProblem(aiDir, info) {
+  const keep = info.files ? ` (plans/ has ${info.files} file(s) — keep them before removing)` : '';
+  return `plans-only .ai/ layer: ${aiDir} — likely created by a relative plansDirectory in user-level `
+    + `agent settings (e.g. ~/.claude/settings.json); remove it if empty, or scaffold it with 'dot-ai init'${keep}`;
 }
 
 // Index health for every indexed folder of the layer (README.md only; _README.md
@@ -91,13 +113,16 @@ function run(opts) {
   const aiDir = findRoot(cwd);
   if (!aiDir) { console.error('doctor: no .ai/ directory found at or above the current directory.'); process.exit(2); }
 
-  const problems = diagnose(aiDir);
-  const ignore = diagnoseIgnore(aiDir);
-  problems.push(...ignore.problems);
-  const indexes = diagnoseIndexes(aiDir);
-  problems.push(...indexes.problems);
-  console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   const chain = cascadeChain(cwd);
+  const layers = chain.includes(aiDir) ? chain : [aiDir, ...chain];
+  const strays = layers.map((ai) => ({ ai, info: plansOnly(ai) })).filter((s) => s.info);
+  const nearestStray = strays.some((s) => s.ai === aiDir);
+  const problems = nearestStray ? [] : diagnose(aiDir);
+  const ignore = nearestStray ? { problems: [], notes: [] } : diagnoseIgnore(aiDir);
+  const indexes = nearestStray ? { problems: [], warnings: [], unlisted: 0 } : diagnoseIndexes(aiDir);
+  problems.push(...ignore.problems, ...indexes.problems);
+  problems.push(...strays.map((s) => plansOnlyProblem(s.ai, s.info)));
+  console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   if (chain.length > 1) {
     console.error('  cascade (broad → specific):');
     [...chain].reverse().forEach((ai) => console.error(`    - ${ai}`));
@@ -184,4 +209,4 @@ function diagnoseIgnore(aiDir) {
   return { problems, notes };
 }
 
-module.exports = { run, diagnose, diagnoseIgnore, diagnoseIndexes };
+module.exports = { run, plansOnly, diagnose, diagnoseIgnore, diagnoseIndexes };

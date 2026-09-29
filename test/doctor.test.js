@@ -231,5 +231,45 @@ check('doctor with a broken GIT_DIR still runs index checks without crashing', (
   assert.ok(/unlisted in index: knowledge\/z\.md/.test(r.stderr), r.stderr);
 });
 
+// --- 1.2.0: plans-only layers, .ai/.ai file
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+check('nearest plans-only layer: only that problem is reported', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(/✗ plans-only \.ai\/ layer: .*\.ai — likely created by a relative plansDirectory/.test(r.stderr), r.stderr);
+  assert.ok(!/missing folder/.test(r.stderr), `structural noise should be suppressed:\n${r.stderr}`);
+  assert.ok(!/has \d+ file/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.writeFileSync(path.join(d, '.ai', 'plans', 'p.md'), 'x\n');
+fs.writeFileSync(path.join(d, '.ai', '.DS_Store'), '');
+check('plans-only with files says to keep them; .DS_Store ignored', () => {
+  const r = doctorErr(d);
+  assert.ok(/plans\/ has 1 file\(s\) — keep them before removing/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+check('ancestor plans-only layer is flagged from a real project', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(!r.ok);
+  assert.ok(r.stderr.includes(`plans-only .ai/ layer: ${path.join(d, '.ai')}`), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+check('a scaffolded layer is not plans-only', () => {
+  assert.ok(!/plans-only/.test(doctorErr(d).stderr));
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', '.ai'), 'oops\n');
+check('a FILE named .ai/.ai gets its own wording', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(/stray file \.ai\/\.ai inside the layer — remove it/.test(r.stderr), r.stderr);
+  assert.ok(!/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);
