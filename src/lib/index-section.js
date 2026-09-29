@@ -56,7 +56,10 @@ function parseSection(body) {
     if (line.startsWith('|')) {
       style = 'table';
       if (SEP_RE.test(line.trim()) || SEP_RE.test((lines[i + 1] || '').trim())) return;
-      const r = refOf(line.split('|')[1] || '');
+      // Entry = first column's link/backticked name; else the first link anywhere in
+      // the row. Backticks outside column 1 are description text, never entries.
+      const lm = line.match(LINK_RE);
+      const r = refOf(line.split('|')[1] || '') || (lm ? normalizeRef(lm[1]) : null);
       if (r) refs.push(r);
     } else if (/^[-*] /.test(line)) {
       if (style === 'empty') style = 'bullets';
@@ -72,19 +75,21 @@ function listedRefs(text) {
   return sec ? parseSection(text.slice(sec.bodyStart, sec.end)).refs : [];
 }
 
-function row(name, style) {
-  const target = (name.endsWith('/') ? `${name}README.md` : name).replace(/ /g, '%20');
+function row(name, style, hasReadme) {
+  const dirLink = hasReadme(name) ? `${name}README.md` : name;
+  const target = (name.endsWith('/') ? dirLink : name).replace(/ /g, '%20');
   const link = `[${name}](${target})`;
   return style === 'bullets' ? `- ${link} — ${PLACEHOLDER}` : `| ${link} | ${PLACEHOLDER} |`;
 }
 
 // Add placeholder entries for `names`, matching the section's style. Creates the
 // section (as a table) if absent. Never touches existing entries.
-function addEntries(text, names) {
+function addEntries(text, names, opts = {}) {
+  const hasReadme = opts.hasReadme || (() => true);
   if (names.length === 0) return text;
   const sec = findSection(text);
   if (!sec) {
-    const rows = names.map((n) => row(n, 'table')).join('\n');
+    const rows = names.map((n) => row(n, 'table', hasReadme)).join('\n');
     return `${text.replace(/\s*$/, '')}\n\n## Index\n\n${TABLE_HEADER}\n${rows}\n`;
   }
   const lines = text.slice(sec.bodyStart, sec.end).split('\n');
@@ -92,12 +97,12 @@ function addEntries(text, names) {
   let at = 0; // insert after lines[at]; lines[0] is the rest of the heading line
   let block;
   if (style === 'empty') {
-    block = ['', TABLE_HEADER, ...names.map((n) => row(n, 'table'))];
+    block = ['', TABLE_HEADER, ...names.map((n) => row(n, 'table', hasReadme))];
   } else {
     const isEntry = style === 'table' ? (l) => l.startsWith('|') : (l) => /^[-*] /.test(l);
     lines.forEach((l, i) => { if (isEntry(l)) at = i; });
     if (style === 'bullets') while (at + 1 < lines.length && /^\s+\S/.test(lines[at + 1])) at++;
-    block = names.map((n) => row(n, style));
+    block = names.map((n) => row(n, style, hasReadme));
   }
   if (at + 1 < lines.length && lines[at + 1].trim() !== '') block.push('');
   lines.splice(at + 1, 0, ...block);

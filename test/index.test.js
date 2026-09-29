@@ -235,5 +235,42 @@ check('--dry-run on a missing README prints "would create" and creates nothing',
   assert.ok(!fs.existsSync(K(d, 'README.md')));
 });
 
+// --- #1: subfolder links point at a README only when one exists
+check('addEntries links a README-less subfolder to the folder itself', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['d/'], { hasReadme: () => false });
+  assert.ok(t.includes('| [d/](d/) | TODO: describe |'), t);
+});
+check('addEntries links a subfolder with a README to its README', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['d/'], { hasReadme: () => true });
+  assert.ok(t.includes('| [d/](d/README.md) | TODO: describe |'), t);
+});
+d = tmp(); scaffold(d);
+put(K(d, 'bare', 'x.md')); put(K(d, 'withreadme', 'README.md'));
+index(d, ['knowledge']);
+check('index links README-less subfolders as dir/ and others as dir/README.md', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [bare/](bare/) | TODO: describe |'), t);
+  assert.ok(t.includes('| [withreadme/](withreadme/README.md) | TODO: describe |'), t);
+});
+check('re-running index after dir/ links adds nothing', () => {
+  const before = read(K(d, 'README.md')); index(d, ['knowledge']);
+  assert.strictEqual(read(K(d, 'README.md')), before);
+});
+
+// --- #10: a row's entry may be a link outside the first column
+check('a link in a later column counts as the row entry', () => {
+  assert.deepStrictEqual(idx.listedRefs('## Index\n\n| Title | Link |\n|---|---|\n| Arch | [a.md](a.md) |\n'), ['a.md']);
+});
+check('backticked words in a description are not entries', () => {
+  assert.deepStrictEqual(idx.listedRefs('## Index\n\n| File | Answers |\n|---|---|\n| [a.md](a.md) | see `b.md` |\n'), ['a.md']);
+});
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\n\n## Index\n\n| Title | Link |\n|---|---|\n| Arch | [a.md](a.md) |\n');
+put(K(d, 'a.md'));
+index(d, ['knowledge']);
+check('index does not duplicate a row whose link is in column 2', () => {
+  assert.strictEqual((read(K(d, 'README.md')).match(/a\.md\]/g) || []).length, 1, read(K(d, 'README.md')));
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);

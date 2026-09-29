@@ -22,7 +22,7 @@ function updateIndexFile(dir, file, seed, entries, publicFile, dry) {
   const listed = new Set(refs.map(topOf));
   const missing = entries.filter((n) => !listed.has(topOf(n)));
   if (exists && missing.length === 0) return;
-  const next = idx.addEntries(cur, missing);
+  const next = idx.addEntries(cur, missing, { hasReadme: (n) => fs.existsSync(path.join(dir, n, 'README.md')) });
   const what = exists ? `add ${missing.length} index row(s) to` : `create (${missing.length} row(s))`;
   if (dry) { console.error(`  would ${what}: ${rel}`); return; }
   fs.writeFileSync(file, next);
