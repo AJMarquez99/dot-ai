@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const markers = require('./markers');
 
 const BEGIN = '<!-- BEGIN .ai-convention -->';
 const END = '<!-- END .ai-convention -->';
@@ -12,38 +13,19 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows).
 function homeDir() { return process.env.HOME || os.homedir(); }
 
-// Same line-based marker state machine as install.sh's block_ok() + replacement
-// awk: split into records the way awk does, trim each the same way (CR then
-// surrounding spaces/tabs), require well-formed non-nested BEGIN/END pairs, and
-// replace every pair's contents with `block` — never a regex against raw text,
-// so the two runners can't diverge on where a line boundary or `$` falls.
+// Replace every BEGIN/END pair via the shared line-based state machine (markers.js), which install.sh mirrors in awk — never a regex against raw text, so the two runners can't diverge on where a line boundary falls.
 function inject(target, block, dry) {
   const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
   if (cur !== null && cur.includes(BEGIN)) {
-    const recs = cur.split('\n');
-    if (cur.endsWith('\n')) recs.pop(); // awk records: a trailing \n ends the last record
-    const norm = (l) => l.replace(/\r$/, '').replace(/^[ \t]+|[ \t]+$/g, '');
-    let inb = false, n = 0, ok = true;
-    for (const r of recs) {
-      const l = norm(r);
-      if (l === BEGIN) { if (inb) { ok = false; break; } inb = true; }
-      else if (l === END) { if (!inb) { ok = false; break; } inb = false; n++; }
-    }
-    if (!ok || inb || n === 0) {
+    const r = markers.replaceBlocks(cur, BEGIN, END, block);
+    if (r.status !== 'ok') {
       console.error(`  warning: ${target} has an incomplete or malformed convention block — not modified`);
       return;
     }
-    const out = []; let skip = false;
-    for (const r of recs) {
-      const l = norm(r);
-      if (l === BEGIN) { out.push(...block.split('\n')); skip = true; continue; }
-      if (l === END) { skip = false; continue; }
-      if (!skip) out.push(r);
-    }
-    const next = out.map((l) => `${l}\n`).join(''); // awk prints every record with \n
-    if (next === cur) { console.error(`  unchanged: ${target}`); return; }
+    if (r.blocks > 1) console.error(`  warning: ${r.blocks} convention blocks in ${target} — remove the extras by hand`);
+    if (r.text === cur) { console.error(`  unchanged: ${target}`); return; }
     if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
-    fs.writeFileSync(target, next);
+    fs.writeFileSync(target, r.text);
     console.error(`  updated block in: ${target}`);
     return;
   }
