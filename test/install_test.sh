@@ -255,13 +255,75 @@ begin_no_end_case() {
   cp CLAUDE.md before.md
   out=$($runner --claude --no-plans 2>&1) || fail "$name: BEGIN-without-END run exited non-zero"
   cmp -s CLAUDE.md before.md || fail "$name: BEGIN-without-END file was modified"
-  printf '%s\n' "$out" | grep -qE 'warning:.*BEGIN marker without END' || fail "$name: no warning for BEGIN-without-END"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for BEGIN-without-END"
   out=$($runner --claude --no-plans --dry-run 2>&1) || fail "$name: BEGIN-without-END dry-run exited non-zero"
   cmp -s CLAUDE.md before.md || fail "$name: BEGIN-without-END dry-run modified the file"
-  printf '%s\n' "$out" | grep -qE 'warning:.*BEGIN marker without END' || fail "$name: dry-run did not warn for BEGIN-without-END"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: dry-run did not warn for BEGIN-without-END"
   printf '%s\n' "$out" | grep -qF 'would inject' && fail "$name: dry-run previewed an inject for BEGIN-without-END"
   cd /; rm -rf "$work"
   pass "$name (begin-no-end)"
+}
+
+# (#4) A marker counts only as a *whole* line — trailing spaces/tabs after a
+# marker, or leading indentation before one, must not confuse the parity
+# guard: (a) trailing space after END still replaces the block correctly;
+# (b) leading indentation before BEGIN still replaces the block correctly.
+trailing_space_end_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention --> \nAFTER\n' > CLAUDE.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: trailing-space-END run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: trailing-space-END block not updated"
+  grep -qF 'OLD' CLAUDE.md && fail "$name: trailing-space-END stale body not replaced"
+  grep -qF 'AFTER' CLAUDE.md || fail "$name: trailing-space-END lost content after the block"
+  cd /; rm -rf "$work"
+  pass "$name (trailing space after END)"
+}
+
+indented_begin_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n  <!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\nAFTER\n' > CLAUDE.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: indented-BEGIN run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: indented-BEGIN block not updated"
+  grep -qF 'OLD' CLAUDE.md && fail "$name: indented-BEGIN stale body not replaced"
+  grep -qF 'AFTER' CLAUDE.md || fail "$name: indented-BEGIN lost content after the block"
+  cd /; rm -rf "$work"
+  pass "$name (indented BEGIN)"
+}
+
+# (c) BEGIN present only inline in prose, with no marker line at all: not a
+# real block — must not modify the file, just warn and exit 0.
+inline_marker_prose_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf 'see <!-- BEGIN .ai-convention --> here\nAFTER\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: inline-marker-prose run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: inline-marker-prose file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for inline-marker-prose"
+  cd /; rm -rf "$work"
+  pass "$name (inline marker prose)"
+}
+
+# Cross-runner byte parity for the whole-line marker predicate (#4): identical
+# trailing-space/indented-marker input must produce byte-identical output.
+malformed_marker_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention --> \nAFTER\n' > "$a/CLAUDE.md"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention --> \nAFTER\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "malformed marker parity (trailing space after END): install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\n  <!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\nAFTER\n' > "$a/CLAUDE.md"
+  printf '# t\n  <!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\nAFTER\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "malformed marker parity (indented BEGIN): install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "malformed marker parity (trailing space / indentation)"
 }
 
 # inject() output is byte-identical between the two installers for a target
@@ -323,5 +385,12 @@ crlf_stale_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 crlf_stale_parity_case
 begin_no_end_case "install.sh" "sh $REPO_ROOT/install.sh"
 begin_no_end_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+trailing_space_end_case "install.sh" "sh $REPO_ROOT/install.sh"
+trailing_space_end_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+indented_begin_case "install.sh" "sh $REPO_ROOT/install.sh"
+indented_begin_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+inline_marker_prose_case "install.sh" "sh $REPO_ROOT/install.sh"
+inline_marker_prose_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+malformed_marker_parity_case
 inject_newline_parity_case
 printf 'ALL PASS\n'

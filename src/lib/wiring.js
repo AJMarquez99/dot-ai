@@ -15,11 +15,14 @@ function homeDir() { return process.env.HOME || os.homedir(); }
 function inject(target, block, dry) {
   const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
   if (cur !== null && cur.includes(BEGIN)) {
-    if (!cur.includes(END)) {
-      console.error(`  warning: ${target} has a BEGIN marker without END — not modified`);
+    // A marker counts only as a whole line (leading/trailing spaces/tabs and a
+    // trailing \r allowed) — must match install.sh's has_marker_line() exactly.
+    const line = (m) => new RegExp(`^[ \\t]*${escapeRe(m)}[ \\t]*\\r?$`, 'm');
+    if (!line(BEGIN).test(cur) || !line(END).test(cur)) {
+      console.error(`  warning: ${target} has an incomplete or malformed convention block — not modified`);
       return;
     }
-    const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}\\r?`);
+    const re = new RegExp(`^[ \\t]*${escapeRe(BEGIN)}[ \\t]*\\r?\\n[\\s\\S]*?^[ \\t]*${escapeRe(END)}[ \\t]*\\r?$`, 'm');
     const next = cur.replace(re, () => block); // fn: no $-pattern expansion
     if (next === cur) { console.error(`  unchanged: ${target}`); return; }
     if (dry) { console.error(`  would inject convention block -> ${target}`); return; }

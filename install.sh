@@ -166,6 +166,11 @@ codex_target() {
   if [ "$GLOBAL" -eq 1 ]; then printf '%s/AGENTS.md' "${CODEX_HOME:-$HOME/.codex}"; else printf 'AGENTS.md'; fi
 }
 
+# A marker counts only as a whole line, after stripping a trailing \r and any
+# leading/trailing spaces/tabs (must match the awk replacement's own trimming,
+# and wiring.js's line() regex, exactly — see #4 parity fix).
+has_marker_line() { awk -v m="$2" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==m {f=1} END{exit !f}' "$1"; }
+
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
@@ -174,14 +179,14 @@ inject() {
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
-    if ! grep -qF "$END" "$target"; then
+    if ! has_marker_line "$target" "$BEGIN" || ! has_marker_line "$target" "$END"; then
       rm -f "$bf"
-      log "  warning: $target has a BEGIN marker without END — not modified"
+      log "  warning: $target has an incomplete or malformed convention block — not modified"
       return 0
     fi
     tmp=$(mktemp)
     awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
-      { l=$0; sub(/\r$/, "", l) }
+      { l=$0; sub(/\r$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l) }
       l==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
       l==e {skip=0; next}
       skip!=1 {print}
