@@ -10,6 +10,9 @@ const LINK_RE = /\]\(([^)\s]+)\)/;
 const TICK_RE = /`([^`]+)`/;
 const TABLE_HEADER = '| File | Answers |\n|---|---|';
 const PLACEHOLDER = 'TODO: describe';
+const LOCAL_MARK = '(local)';
+const LOCAL_CELL_RE = /^\s*`[^`]+`\s*\(local\)\s*$/;
+const LOCAL_BULLET_RE = /^[-*] `[^`]+`\s*\(local\)/;
 const SKIP = new Set(['README.md', '_README.md']);
 
 // Top-level entries of a folder split by visibility; dirs carry a trailing '/'.
@@ -41,33 +44,35 @@ function normalizeRef(ref) {
   return r;
 }
 
-function refOf(s) {
-  const m = s.match(LINK_RE) || s.match(TICK_RE);
-  return m ? normalizeRef(m[1]) : null;
-}
-
 // Style ('table' | 'bullets' | 'empty') and the entry each row/bullet names.
 // Table header rows (the row above a separator) and separators are skipped.
 function parseSection(body) {
   const lines = body.split('\n');
-  const refs = [];
+  const refs = [], entries = [];
   let style = 'empty';
+  const add = (ref, local, linked, line) => {
+    refs.push(ref);
+    entries.push({ ref, local, linked, todo: line.includes(PLACEHOLDER) });
+  };
   lines.forEach((line, i) => {
     if (line.startsWith('|')) {
       style = 'table';
       if (SEP_RE.test(line.trim()) || SEP_RE.test((lines[i + 1] || '').trim())) return;
       // Entry = first column's link/backticked name; else the first link anywhere in
       // the row. Backticks outside column 1 are description text, never entries.
+      const col1 = line.split('|')[1] || '';
+      const c1 = col1.match(LINK_RE) || col1.match(TICK_RE);
       const lm = line.match(LINK_RE);
-      const r = refOf(line.split('|')[1] || '') || (lm ? normalizeRef(lm[1]) : null);
-      if (r) refs.push(r);
+      if (c1) add(normalizeRef(c1[1]), LOCAL_CELL_RE.test(col1), LINK_RE.test(col1), line);
+      else if (lm) add(normalizeRef(lm[1]), false, true, line);
     } else if (/^[-*] /.test(line)) {
       if (style === 'empty') style = 'bullets';
-      const r = refOf(line);
-      if (r) refs.push(r);
+      const lk = line.match(LINK_RE);
+      const m = lk || line.match(TICK_RE);
+      if (m) add(normalizeRef(m[1]), LOCAL_BULLET_RE.test(line), Boolean(lk), line);
     }
   });
-  return { style, refs };
+  return { style, refs, entries };
 }
 
 function listedRefs(text) {
@@ -75,7 +80,11 @@ function listedRefs(text) {
   return sec ? parseSection(text.slice(sec.bodyStart, sec.end)).refs : [];
 }
 
-function row(name, style, hasReadme) {
+function row(name, style, hasReadme, local) {
+  if (local) {
+    const cell = `\`${name}\` ${LOCAL_MARK}`;
+    return style === 'bullets' ? `- ${cell} — ${PLACEHOLDER}` : `| ${cell} | ${PLACEHOLDER} |`;
+  }
   const dirLink = hasReadme(name) ? `${name}README.md` : name;
   const target = (name.endsWith('/') ? dirLink : name).replace(/ /g, '%20');
   const link = `[${name}](${target})`;
@@ -86,10 +95,11 @@ function row(name, style, hasReadme) {
 // section (as a table) if absent. Never touches existing entries.
 function addEntries(text, names, opts = {}) {
   const hasReadme = opts.hasReadme || (() => true);
+  const isLocal = opts.isLocal || (() => false);
   if (names.length === 0) return text;
   const sec = findSection(text);
   if (!sec) {
-    const rows = names.map((n) => row(n, 'table', hasReadme)).join('\n');
+    const rows = names.map((n) => row(n, 'table', hasReadme, isLocal(n))).join('\n');
     return `${text.replace(/\s*$/, '')}\n\n## Index\n\n${TABLE_HEADER}\n${rows}\n`;
   }
   const lines = text.slice(sec.bodyStart, sec.end).split('\n');
@@ -97,12 +107,12 @@ function addEntries(text, names, opts = {}) {
   let at = 0; // insert after lines[at]; lines[0] is the rest of the heading line
   let block;
   if (style === 'empty') {
-    block = ['', TABLE_HEADER, ...names.map((n) => row(n, 'table', hasReadme))];
+    block = ['', TABLE_HEADER, ...names.map((n) => row(n, 'table', hasReadme, isLocal(n)))];
   } else {
     const isEntry = style === 'table' ? (l) => l.startsWith('|') : (l) => /^[-*] /.test(l);
     lines.forEach((l, i) => { if (isEntry(l)) at = i; });
     if (style === 'bullets') while (at + 1 < lines.length && /^\s+\S/.test(lines[at + 1])) at++;
-    block = names.map((n) => row(n, style, hasReadme));
+    block = names.map((n) => row(n, style, hasReadme, isLocal(n)));
   }
   if (at + 1 < lines.length && lines[at + 1].trim() !== '') block.push('');
   lines.splice(at + 1, 0, ...block);
@@ -114,4 +124,28 @@ function privateSeed() {
     'never appear in the committed `README.md`.\n\n## Index\n\n' + TABLE_HEADER + '\n';
 }
 
-module.exports = { TABLE_HEADER, PLACEHOLDER, listEntries, findSection, parseSection, listedRefs, addEntries, privateSeed };
+const topOf = (ref) => ref.replace(/\/+$/, '').split('/')[0];
+
+// Findings for one index file, shared by `index` (reports) and `doctor` (checks).
+// Pure: filesystem and git answers are injected.
+function auditIndex({ text, entries, exists, ignored, isPublic }) {
+  const sec = findSection(text);
+  const listed = sec ? parseSection(text.slice(sec.bodyStart, sec.end)).entries : [];
+  const out = { privateEntries: [], stale: [], linkedIgnored: [], missing: [], todo: 0 };
+  for (const e of listed) {
+    if (e.todo) out.todo++;
+    const top = topOf(e.ref);
+    if (e.ref.includes('://') || !top) continue;
+    if (isPublic && top.startsWith('_')) out.privateEntries.push(e.ref);
+    else if (!e.local && !exists(top)) out.stale.push(e.ref);
+    else if (isPublic && e.linked && (ignored.has(top) || ignored.has(`${top}/`))) out.linkedIgnored.push(e.ref);
+  }
+  const have = new Set(listed.map((e) => topOf(e.ref)));
+  out.missing = entries.filter((n) => !have.has(topOf(n)));
+  return out;
+}
+
+module.exports = {
+  TABLE_HEADER, PLACEHOLDER, LOCAL_MARK, listEntries, findSection, parseSection, listedRefs, addEntries,
+  privateSeed, topOf, auditIndex,
+};

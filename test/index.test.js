@@ -337,5 +337,55 @@ d = tmp(); scaffold(d);
   });
 }
 
+// --- 1.2.0: (local) rows and auditIndex (pure)
+check('addEntries writes a name-only (local) table row for local names', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['a.md', 'l.md', 'd/'],
+    { hasReadme: () => false, isLocal: (n) => n !== 'a.md' });
+  assert.ok(t.includes('| [a.md](a.md) | TODO: describe |'), t);
+  assert.ok(t.includes('| `l.md` (local) | TODO: describe |'), t);
+  assert.ok(t.includes('| `d/` (local) | TODO: describe |'), t);
+});
+check('addEntries writes a name-only (local) bullet', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n- [a.md](a.md) — x\n', ['l.md'], { isLocal: () => true });
+  assert.ok(t.includes('- `l.md` (local) — TODO: describe'), t);
+});
+check('parseSection marks (local), linked and todo entries', () => {
+  const { entries } = idx.parseSection('\n| File | Answers |\n|---|---|\n| [a.md](a.md) | x |\n| `l.md` (local) | TODO: describe |\n| `b.md` | y |\n');
+  assert.deepStrictEqual(entries, [
+    { ref: 'a.md', local: false, linked: true, todo: false },
+    { ref: 'l.md', local: true, linked: false, todo: true },
+    { ref: 'b.md', local: false, linked: false, todo: false },
+  ]);
+});
+check('parseSection marks (local) bullets', () => {
+  const { entries } = idx.parseSection('\n- `l.md` (local) — note\n- [a.md](a.md) — x\n');
+  assert.deepStrictEqual(entries.map((e) => e.local), [true, false]);
+});
+check('auditIndex classifies every finding', () => {
+  const text = '# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n'
+    + '| [a.md](a.md) | ok |\n| [gone.md](gone.md) | x |\n| `l.md` (local) | TODO: describe |\n'
+    + '| [ign.md](ign.md) | x |\n| [_s.md](_s.md) | x |\n| [https://x.io](https://x.io) | x |\n';
+  const onDisk = new Set(['a.md', 'ign.md', '_s.md', 'new.md', 'd']);
+  const a = idx.auditIndex({
+    text, entries: ['a.md', 'ign.md', 'new.md', 'd/'], exists: (t) => onDisk.has(t),
+    ignored: new Set(['ign.md']), isPublic: true,
+  });
+  assert.deepStrictEqual(a.privateEntries, ['_s.md']);
+  assert.deepStrictEqual(a.stale, ['gone.md']);            // l.md is (local): never stale
+  assert.deepStrictEqual(a.linkedIgnored, ['ign.md']);
+  assert.deepStrictEqual(a.missing, ['new.md', 'd/']);
+  assert.strictEqual(a.todo, 1);
+});
+check('auditIndex: private index never reports linkedIgnored or privateEntries', () => {
+  const a = idx.auditIndex({ text: '## Index\n\n| File | Answers |\n|---|---|\n| [_s.md](_s.md) | x |\n',
+    entries: ['_s.md'], exists: () => true, ignored: new Set(['_s.md']), isPublic: false });
+  assert.deepStrictEqual([a.privateEntries, a.linkedIgnored, a.missing], [[], [], []]);
+});
+check('auditIndex: ignored dir matched by its trailing-slash name', () => {
+  const a = idx.auditIndex({ text: '## Index\n\n| File | Answers |\n|---|---|\n| [d/](d/README.md) | x |\n',
+    entries: ['d/'], exists: () => true, ignored: new Set(['d/']), isPublic: true });
+  assert.deepStrictEqual(a.linkedIgnored, ['d/']);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);

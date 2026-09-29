@@ -2,10 +2,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 const { findRoot } = require('../lib/root');
 const { FOLDERS, isCanonical } = require('../lib/structure');
 const { cascadeChain } = require('../lib/cascade');
+const { git } = require('../lib/git-ignore');
 
 // Collect problems with the nearest .ai/ tree (read-only). Returns string[].
 function diagnose(aiDir) {
@@ -76,15 +76,6 @@ function run(opts) {
     : "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule.";
   console.error(`\n${problems.length} problem(s) found. ${hint}`);
   process.exit(1);
-}
-
-// Run git, tolerating its absence. status null means git could not be executed.
-function git(args, cwd) {
-  // C locale: git translates its messages, and diagnoseIgnore matches one.
-  const r = spawnSync('git', args,
-    { cwd, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', LANGUAGE: 'C' } });
-  if (r.error) return { ok: false, status: null, out: '', err: '' };
-  return { ok: true, status: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
 }
 
 // Verify the _* local-prefix rule is actually IN FORCE, rather than merely
