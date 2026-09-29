@@ -60,15 +60,33 @@ cli.js:162–166) — no config, no settings.
 
 Both build the same block: `BEGIN` marker, the contents of `agent-instructions.md`, `END` marker.
 
-**Shell (`inject`, install.sh:172–204).** The block is written to a temp file and read back via `awk`
-`getline` (install.sh:183–187). This is deliberate: BSD/macOS `awk` rejects a multi-line value passed
-with `-v`, and `getline` from a file also correctly handles a block that isn't at end-of-file. The
-`awk` program replaces the lines from `BEGIN` to `END` inclusive when the marker is already present;
-otherwise the file is appended to.
+Both sides implement the **same line-based marker state machine**, not a regex against raw text, so
+they can't diverge on where a line boundary or `$` falls. Each record (line) is normalized the same
+way before comparison — strip a trailing `\r`, then trim surrounding spaces/tabs — and a marker only
+counts if the *entire* trimmed line equals `BEGIN` or `END` exactly. The scan requires well-formed,
+non-nested `BEGIN`/`END` pairs: an `END` before its matching `BEGIN`, a `BEGIN` nested inside an
+already-open block, an unterminated `BEGIN`, or zero pairs are all **malformed** — the file is left
+untouched and a warning is printed, never partially rewritten. `LC_ALL=C` guards the shell side of
+this comparison (see below).
 
-**JS (`inject`, cli.js:56–72).** When the marker is present, it does a single regex replace —
-`new RegExp(BEGIN…[\s\S]*?…END)` (non-greedy, `escapeRe`-escaped markers, cli.js:62) — substituting
-the new block. Otherwise it appends.
+**Shell (`block_ok` + `inject`, install.sh:183, 199–204).** `block_ok` runs first: an `awk` pass that
+normalizes each record and walks the same-line state machine purely to validate structure (no output).
+If it fails, `inject` warns and returns without touching the file. If it passes, a second `awk` pass —
+reading the new block from a temp file via `getline` (BSD/macOS `awk` rejects a multi-line value
+passed with `-v`, and `getline` also correctly handles a block that isn't at end-of-file) — replaces
+every line from each `BEGIN` through its matching `END` inclusive. Both `awk` invocations are prefixed
+`LC_ALL=C`: macOS BWK `awk` collates in the shell's locale, and under a UTF-8 locale a stray byte like
+a UTF-8 BOM or U+200B sitting next to a marker can be treated as insignificant, making a
+non-marker line falsely compare equal to `BEGIN`/`END` — a parity break, since cli.js's plain
+string equality never does that. `LC_ALL=C` forces a byte-exact comparison so both runners agree on
+which lines are markers.
+
+**JS (`inject`, wiring.js `inject`).** `cur.split('\n')` reproduces awk's records (popping the final
+empty entry when the file ends in `\n`, since a trailing `\n` ends awk's last record rather than
+starting an empty one), each record is normalized with the identical CR-strip + trim, and the same
+structural scan runs before any replacement. On success, the block's lines replace each `BEGIN…END`
+run in place and the result is rejoined with `\n`; on structural failure it warns and returns without
+writing, exactly like the shell side.
 
 **The newline-separation parity** is the subtle part and has its own regression guard
 (`inject_newline_parity_case`, which diffs the two installers byte-for-byte). The agreed behavior:
@@ -141,7 +159,11 @@ nothing" guarantee. The pattern is: each function that writes takes the dry flag
 `would …` line and returns before any filesystem effect.
 
 - Scaffold copy: `would add` per file (install.sh:101–102, cli.js:46–47).
-- Inject: `would inject convention block -> <target>` (install.sh:174–177, cli.js:57).
+- Inject: a current block that needs no change prints `unchanged: <target>` regardless of `--dry-run`
+  (nothing to preview); a stale or absent block previews `would inject convention block -> <target>`
+  and writes nothing. A real (non-dry) run instead prints `updated block in: <target>` when replacing
+  an existing block or `appended block to: <target>` when adding a new one — never previewed under
+  `--dry-run` since no write happens.
 - JSON merge: `would set <key>=<val> in: <file>` (install.sh:221–224, cli.js:92).
 
 The harness asserts dry-run creates no `.ai`, `CLAUDE.md`, `.claude`, or `.gemini`, and prints `would`
