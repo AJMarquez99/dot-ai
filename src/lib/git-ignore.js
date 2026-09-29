@@ -17,8 +17,9 @@ function git(args, cwd, input) {
 // shareable). Returns { git: false, reason } when git can't answer.
 function classify(dir, names) {
   const inside = git(['rev-parse', '--is-inside-work-tree'], dir);
-  if (!inside.ok) return { git: false, reason: 'git not on PATH' };
-  if (inside.status !== 0 || inside.out !== 'true') return { git: false, reason: 'not a git work tree' };
+  if (!inside.ok) return { git: false, reason: 'git could not be run' };
+  if (inside.status !== 0) return { git: false, reason: 'not a git work tree (or git failed)' };
+  if (inside.out !== 'true') return { git: false, reason: 'not a git work tree' };
   if (names.length === 0) return { git: true, ignored: new Set() };
   const r = git(['check-ignore', '-z', '--stdin'], dir, `${names.join('\0')}\0`);
   if (r.status === 1) return { git: true, ignored: new Set() };

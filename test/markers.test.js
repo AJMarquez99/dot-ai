@@ -46,19 +46,19 @@ check('unterminated BEGIN is malformed and text untouched', () => {
   assert.strictEqual(r.status, 'malformed'); assert.strictEqual(r.text, t);
 });
 check('BOM before BEGIN on record 1 is tolerated and preserved', () => {
-  const r = m.replaceBlocks(`﻿${B}\nOLD\n${E}\n`, B, E, NEW);
+  const r = m.replaceBlocks(`\uFEFF${B}\nOLD\n${E}\n`, B, E, NEW);
   assert.strictEqual(r.status, 'ok');
-  assert.strictEqual(r.text, `﻿${NEW}\n`);
+  assert.strictEqual(r.text, `\uFEFF${NEW}\n`);
 });
 check('BOM then spaces before BEGIN on record 1 is tolerated', () => {
-  assert.strictEqual(m.scanBlocks(`﻿  ${B}\nx\n${E}\n`, B, E).status, 'ok');
+  assert.strictEqual(m.scanBlocks(`\uFEFF  ${B}\nx\n${E}\n`, B, E).status, 'ok');
 });
 check('BOM before a marker on a later record is NOT tolerated', () => {
-  assert.strictEqual(m.scanBlocks(`${B}\nx\n﻿${E}\n`, B, E).status, 'malformed');
+  assert.strictEqual(m.scanBlocks(`${B}\nx\n\uFEFF${E}\n`, B, E).status, 'malformed');
 });
 check('BOM before a non-marker first line survives replacement', () => {
-  const r = m.replaceBlocks(`﻿# t\n${B}\nOLD\n${E}\n`, B, E, NEW);
-  assert.strictEqual(r.text, `﻿# t\n${NEW}\n`);
+  const r = m.replaceBlocks(`\uFEFF# t\n${B}\nOLD\n${E}\n`, B, E, NEW);
+  assert.strictEqual(r.text, `\uFEFF# t\n${NEW}\n`);
 });
 check('$ sequences in the block are literal', () => {
   assert.ok(m.replaceBlocks(`${B}\n${E}\n`, B, E, `${B}\n$& $1\n${E}`).text.includes('$& $1'));

@@ -41,7 +41,7 @@ function seedFolderReadme(tpl, name) {
   return tpl.replace('# <folder>/', `# ${name}/`).replace(/\*\*Answers:[\s\S]*?\n\n/, () => `${answers}\n\n`);
 }
 
-function indexFolder(aiDir, name, templateAiDir, opts) {
+function indexFolder(aiDir, name, templateAiDir, opts, state) {
   const dir = path.join(aiDir, name);
   const { pub, priv } = idx.listEntries(dir);
   const own = path.join(templateAiDir, name, 'README.md');
@@ -50,9 +50,9 @@ function indexFolder(aiDir, name, templateAiDir, opts) {
   let seed = fs.readFileSync(seedPath, 'utf8').replace(/\r\n/g, '\n');
   if (!usingOwn) seed = seedFolderReadme(seed, name);
   const pubGit = publicIgnored(dir, pub);
-  if (pubGit.note && !opts.gitNoted) {
+  if (pubGit.note && !state.gitNoted) {
     console.error(`  note: git status unavailable (${pubGit.note}) — gitignored files are indexed as links`);
-    opts.gitNoted = true;
+    state.gitNoted = true;
   }
   updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, pubGit.ignored, true, opts.dry);
   const privFile = path.join(dir, '_README.md');
@@ -82,7 +82,8 @@ function run(opts) {
       .filter((f) => !UNINDEXED.includes(f) && fs.existsSync(path.join(aiDir, f)));
   }
   console.error(`Indexing ${aiDir}…`);
-  for (const n of names) indexFolder(aiDir, n, opts.templateAiDir, opts);
+  const state = { gitNoted: false }; // one git-unavailable note per run
+  for (const n of names) indexFolder(aiDir, n, opts.templateAiDir, opts, state);
 }
 
 module.exports = { run };

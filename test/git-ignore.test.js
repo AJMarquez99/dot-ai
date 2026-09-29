@@ -35,7 +35,8 @@ check('classify: empty names -> empty set without spawning check-ignore', () => 
 });
 check('classify: not a repo -> git:false with a reason', () => {
   const r = gi.classify(tmp(), ['a.md']);
-  assert.strictEqual(r.git, false); assert.ok(r.reason);
+  assert.strictEqual(r.git, false);
+  assert.strictEqual(r.reason, 'not a git work tree (or git failed)');
 });
 check('publicIgnored: README ignored -> nothing treated as local', () => {
   const e = tmp(); g(e, 'init', '-q');

@@ -9,7 +9,7 @@
 // Each record is normalized: strip a trailing \r, strip a leading UTF-8 BOM on
 // record 1 only, then trim spaces/tabs. A marker is a record that normalizes to
 // exactly `begin`/`end`. Well-formed = at least one pair, none nested or unterminated.
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 function records(text) {
   const recs = text.split('\n');

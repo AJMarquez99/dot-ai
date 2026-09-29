@@ -89,6 +89,9 @@ function diagnoseIndexes(aiDir) {
     const rel = `${f}/README.md`;
     const text = fs.readFileSync(readme, 'utf8').replace(/\r\n/g, '\n');
     const scan = markers.scanBlocks(text, FOLDER_BEGIN, FOLDER_END);
+    if (scan.status === 'malformed') {
+      problems.push(`${rel} has an incomplete or malformed .ai-folder block — fix it by hand`);
+    }
     if (scan.status === 'ok' && scan.blocks > 1) {
       problems.push(`${scan.blocks} managed blocks in ${rel} — remove the extras by hand`);
     }
@@ -135,6 +138,10 @@ function run(opts) {
     process.exit(0);
   }
   for (const p of problems) console.error(`  ✗ ${p}`);
+  if (problems.length === strays.length) { // plans-only layers only: sync can't help
+    console.error(`\n${problems.length} problem(s) found.`);
+    process.exit(1);
+  }
   const hint = ignore.problems.length
     ? "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule; ignore problems above need a git fix (e.g. 'git rm --cached <path>')."
     : "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule.";

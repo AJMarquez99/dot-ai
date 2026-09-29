@@ -271,5 +271,39 @@ check('a FILE named .ai/.ai gets its own wording', () => {
   assert.ok(!/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
 });
 
+// --- final fix wave: footer for plans-only problems, malformed folder block
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+check('nearest stray only: no sync hint', () => {
+  const r = doctorErr(d);
+  assert.ok(/1 problem\(s\) found\./.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+check('ancestor stray only: no sync hint', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(/plans-only/.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+fs.rmSync(path.join(d, 'proj', '.ai', 'lessons'), { recursive: true });
+check('ancestor stray + nearest problem: sync hint, nearest check and stray line all shown', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+  assert.ok(r.stderr.includes('missing folder: lessons/'), r.stderr);
+  assert.ok(r.stderr.includes('plans-only .ai/ layer'), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.appendFileSync(path.join(d, '.ai', 'knowledge', 'README.md'), '\n<!-- BEGIN .ai-folder -->\n');
+check('malformed .ai-folder block is reported', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(r.stderr.includes('knowledge/README.md has an incomplete or malformed .ai-folder block — fix it by hand'), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

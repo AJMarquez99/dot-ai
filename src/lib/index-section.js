@@ -128,7 +128,7 @@ const topOf = (ref) => ref.replace(/\/+$/, '').split('/')[0];
 
 // Findings for one index file, shared by `index` (reports) and `doctor` (checks).
 // Pure: filesystem and git answers are injected.
-function auditIndex({ text, entries, exists, ignored, isPublic }) {
+function auditIndex({ text, entries, exists, ignored = new Set(), isPublic }) {
   const sec = findSection(text);
   const listed = sec ? parseSection(text.slice(sec.bodyStart, sec.end)).entries : [];
   const out = { privateEntries: [], stale: [], linkedIgnored: [], missing: [], todo: 0 };

@@ -100,9 +100,9 @@ check('stale block without trailing newline keeps no trailing newline', () => {
   assert.ok(r.text.endsWith('\nmine'), JSON.stringify(r.text.slice(-10)));
 });
 check('BOM before the block is tolerated and preserved', () => {
-  const r = fr.planRefresh(`﻿${B}\nOLD\n${E}\n`, TPL, LEGACY);
+  const r = fr.planRefresh(`\uFEFF${B}\nOLD\n${E}\n`, TPL, LEGACY);
   assert.strictEqual(r.action, 'updated');
-  assert.ok(r.text.startsWith(`﻿${B}`));
+  assert.ok(r.text.startsWith(`\uFEFF${B}`));
 });
 check('refreshReadme warns and does not write a malformed README', () => {
   const fs = require('fs'), os = require('os'), path = require('path');
