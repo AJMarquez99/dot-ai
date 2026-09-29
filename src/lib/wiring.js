@@ -12,18 +12,35 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows).
 function homeDir() { return process.env.HOME || os.homedir(); }
 
+// Same line-based marker state machine as install.sh's block_ok() + replacement
+// awk: split into records the way awk does, trim each the same way (CR then
+// surrounding spaces/tabs), require well-formed non-nested BEGIN/END pairs, and
+// replace every pair's contents with `block` — never a regex against raw text,
+// so the two runners can't diverge on where a line boundary or `$` falls.
 function inject(target, block, dry) {
   const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
   if (cur !== null && cur.includes(BEGIN)) {
-    // A marker counts only as a whole line (leading/trailing spaces/tabs and a
-    // trailing \r allowed) — must match install.sh's has_marker_line() exactly.
-    const line = (m) => new RegExp(`^[ \\t]*${escapeRe(m)}[ \\t]*\\r?$`, 'm');
-    if (!line(BEGIN).test(cur) || !line(END).test(cur)) {
+    const recs = cur.split('\n');
+    if (cur.endsWith('\n')) recs.pop(); // awk records: a trailing \n ends the last record
+    const norm = (l) => l.replace(/\r$/, '').replace(/^[ \t]+|[ \t]+$/g, '');
+    let inb = false, n = 0, ok = true;
+    for (const r of recs) {
+      const l = norm(r);
+      if (l === BEGIN) { if (inb) { ok = false; break; } inb = true; }
+      else if (l === END) { if (!inb) { ok = false; break; } inb = false; n++; }
+    }
+    if (!ok || inb || n === 0) {
       console.error(`  warning: ${target} has an incomplete or malformed convention block — not modified`);
       return;
     }
-    const re = new RegExp(`^[ \\t]*${escapeRe(BEGIN)}[ \\t]*\\r?\\n[\\s\\S]*?^[ \\t]*${escapeRe(END)}[ \\t]*\\r?$`, 'm');
-    const next = cur.replace(re, () => block); // fn: no $-pattern expansion
+    const out = []; let skip = false;
+    for (const r of recs) {
+      const l = norm(r);
+      if (l === BEGIN) { out.push(...block.split('\n')); skip = true; continue; }
+      if (l === END) { skip = false; continue; }
+      if (!skip) out.push(r);
+    }
+    const next = out.map((l) => `${l}\n`).join(''); // awk prints every record with \n
     if (next === cur) { console.error(`  unchanged: ${target}`); return; }
     if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
     fs.writeFileSync(target, next);

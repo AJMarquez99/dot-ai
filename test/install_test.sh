@@ -326,6 +326,123 @@ malformed_marker_parity_case() {
   pass "malformed marker parity (trailing space / indentation)"
 }
 
+# (#5) An END line before its matching BEGIN is structurally invalid — the
+# marker-presence check alone (round 2) missed this; the structure scan must
+# catch it: warn, leave the file untouched, in a real run and --dry-run.
+end_before_begin_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- END .ai-convention -->\nOLD\n<!-- BEGIN .ai-convention -->\nAFTER\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: END-before-BEGIN run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: END-before-BEGIN file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for END-before-BEGIN"
+  out=$($runner --claude --no-plans --dry-run 2>&1) || fail "$name: END-before-BEGIN dry-run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: END-before-BEGIN dry-run modified the file"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: dry-run did not warn for END-before-BEGIN"
+  cd /; rm -rf "$work"
+  pass "$name (end-before-begin)"
+}
+
+# (#5) A BEGIN nested inside an already-open block is structurally invalid —
+# must not modify the file, just warn and exit 0.
+nested_begin_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- BEGIN .ai-convention -->\nMORE\n<!-- END .ai-convention -->\nAFTER\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: nested-BEGIN run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: nested-BEGIN file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for nested-BEGIN"
+  cd /; rm -rf "$work"
+  pass "$name (nested begin)"
+}
+
+# (#5) Two well-formed stale blocks: both must be replaced, not just the
+# first — a real requirement once the guard validates structure instead of
+# assuming a single block exists.
+two_blocks_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD1\n<!-- END .ai-convention -->\nMID\n<!-- BEGIN .ai-convention -->\nOLD2\n<!-- END .ai-convention -->\nAFTER\n' > CLAUDE.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: two-blocks run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: two-blocks not updated"
+  grep -qF 'OLD1' CLAUDE.md && fail "$name: first stale block body not replaced"
+  grep -qF 'OLD2' CLAUDE.md && fail "$name: second stale block body not replaced"
+  grep -qF 'MID' CLAUDE.md || fail "$name: content between blocks lost"
+  grep -qF 'AFTER' CLAUDE.md || fail "$name: content after the second block lost"
+  [ "$(grep -cF '<!-- BEGIN .ai-convention -->' CLAUDE.md)" -eq 2 ] || fail "$name: expected two BEGIN markers after replace"
+  cd /; rm -rf "$work"
+  pass "$name (two blocks)"
+}
+
+two_blocks_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD1\n<!-- END .ai-convention -->\nMID\n<!-- BEGIN .ai-convention -->\nOLD2\n<!-- END .ai-convention -->\nAFTER\n' > "$a/CLAUDE.md"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD1\n<!-- END .ai-convention -->\nMID\n<!-- BEGIN .ai-convention -->\nOLD2\n<!-- END .ai-convention -->\nAFTER\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "two blocks parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "two blocks parity"
+}
+
+# (#5) END as the very last line, with no trailing newline on the file: both
+# runners must still recognize and replace the block, and end the file with a
+# newline after the (new) block's last line.
+end_no_trailing_newline_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->' > CLAUDE.md   # no trailing newline
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: END-no-trailing-newline run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: END-no-trailing-newline not updated"
+  grep -qF 'OLD' CLAUDE.md && fail "$name: END-no-trailing-newline stale body not replaced"
+  node -e '
+    const c = require("fs").readFileSync("CLAUDE.md", "utf8");
+    if (!c.endsWith("\n")) { console.error("file does not end with a newline"); process.exit(1); }
+  ' || fail "$name: END-no-trailing-newline did not end with a newline"
+  cd /; rm -rf "$work"
+  pass "$name (end no trailing newline)"
+}
+
+end_no_trailing_newline_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->' > "$a/CLAUDE.md"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "END no-trailing-newline parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "END no-trailing-newline parity"
+}
+
+# (#5, minor) An END line corrupted with a lone \r followed by a space is not
+# a valid marker line in either runner now that neither treats a bare \r as a
+# line terminator (that was the old JS regex-with-'m'-flag quirk) — both must
+# agree it's malformed and leave the file untouched.
+end_cr_space_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\r \nAFTER\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: END-CR-space run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: END-CR-space file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for END-CR-space"
+  cd /; rm -rf "$work"
+  pass "$name (end cr space)"
+}
+
+end_cr_space_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\r \nAFTER\n' > "$a/CLAUDE.md"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\r \nAFTER\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "END CR-space parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "END CR-space parity"
+}
+
 # inject() output is byte-identical between the two installers for a target
 # that lacks a trailing newline (regression guard for newline separation).
 inject_newline_parity_case() {
@@ -392,5 +509,18 @@ indented_begin_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 inline_marker_prose_case "install.sh" "sh $REPO_ROOT/install.sh"
 inline_marker_prose_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 malformed_marker_parity_case
+end_before_begin_case "install.sh" "sh $REPO_ROOT/install.sh"
+end_before_begin_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+nested_begin_case "install.sh" "sh $REPO_ROOT/install.sh"
+nested_begin_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+two_blocks_case "install.sh" "sh $REPO_ROOT/install.sh"
+two_blocks_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+two_blocks_parity_case
+end_no_trailing_newline_case "install.sh" "sh $REPO_ROOT/install.sh"
+end_no_trailing_newline_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+end_no_trailing_newline_parity_case
+end_cr_space_case "install.sh" "sh $REPO_ROOT/install.sh"
+end_cr_space_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+end_cr_space_parity_case
 inject_newline_parity_case
 printf 'ALL PASS\n'

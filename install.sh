@@ -166,10 +166,12 @@ codex_target() {
   if [ "$GLOBAL" -eq 1 ]; then printf '%s/AGENTS.md' "${CODEX_HOME:-$HOME/.codex}"; else printf 'AGENTS.md'; fi
 }
 
-# A marker counts only as a whole line, after stripping a trailing \r and any
-# leading/trailing spaces/tabs (must match the awk replacement's own trimming,
-# and wiring.js's line() regex, exactly — see #4 parity fix).
-has_marker_line() { awk -v m="$2" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==m {f=1} END{exit !f}' "$1"; }
+# Structure check: the file's marker lines (after CR-strip + ws-trim) must form
+# well-formed, non-nested BEGIN/END pairs — no END before its BEGIN, no BEGIN
+# nested inside an open block, and at least one complete pair. Must match
+# wiring.js's inject() scan exactly (same trim, same state machine) — see #5
+# parity fix (structural validation replaces line-count/marker-presence checks).
+block_ok() { awk -v b="$BEGIN" -v e="$END" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{exit (bad||inb||n==0)}' "$1"; }
 
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
@@ -179,7 +181,7 @@ inject() {
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
-    if ! has_marker_line "$target" "$BEGIN" || ! has_marker_line "$target" "$END"; then
+    if ! block_ok "$target"; then
       rm -f "$bf"
       log "  warning: $target has an incomplete or malformed convention block — not modified"
       return 0
