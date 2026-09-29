@@ -86,6 +86,15 @@ if [ "$NO_MD" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [
   exit 2
 fi
 
+# Running inside a .ai/ layer (e.g. ~/.ai) would scaffold a nested .ai/.ai/.
+# Check both the logical cwd ($PWD) and the physical cwd (pwd -P, symlinks
+# resolved) so a symlink in either direction can't sneak past the guard.
+for _d in "$PWD" "$(pwd -P)"; do
+  case "$(basename -- "$_d")" in
+    .ai) log "Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~)."; exit 2 ;;
+  esac
+done
+
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"
 ( cd "$SRC/template" && find .ai -type f -print ) | while IFS= read -r rel; do
@@ -166,28 +175,46 @@ codex_target() {
   if [ "$GLOBAL" -eq 1 ]; then printf '%s/AGENTS.md' "${CODEX_HOME:-$HOME/.codex}"; else printf 'AGENTS.md'; fi
 }
 
+# Structure check: the file's marker lines (after CR-strip + ws-trim) must form
+# well-formed, non-nested BEGIN/END pairs — no END before its BEGIN, no BEGIN
+# nested inside an open block, and at least one complete pair. Must match
+# wiring.js's inject() scan exactly (same trim, same state machine) — see #5
+# parity fix (structural validation replaces line-count/marker-presence checks).
+block_ok() { LC_ALL=C awk -v b="$BEGIN" -v e="$END" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{exit (bad||inb||n==0)}' "$1"; }
+
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
 # values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
-  if [ "$DRY" -eq 1 ]; then
-    log "  would inject convention block -> $target"
-    return 0
-  fi
-  mkdir -p "$(dirname -- "$target")"
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
+    if ! block_ok "$target"; then
+      rm -f "$bf"
+      log "  warning: $target has an incomplete or malformed convention block — not modified"
+      return 0
+    fi
     tmp=$(mktemp)
-    awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
-      $0==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
-      $0==e {skip=0; next}
+    LC_ALL=C awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
+      { l=$0; sub(/\r$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l) }
+      l==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
+      l==e {skip=0; next}
       skip!=1 {print}
     ' "$target" > "$tmp"
+    if cmp -s "$tmp" "$target"; then
+      rm -f "$tmp" "$bf"; log "  unchanged: $target"; return 0
+    fi
+    if [ "$DRY" -eq 1 ]; then
+      rm -f "$tmp" "$bf"; log "  would inject convention block -> $target"; return 0
+    fi
     mv "$tmp" "$target"
     log "  updated block in: $target"
   else
+    if [ "$DRY" -eq 1 ]; then
+      rm -f "$bf"; log "  would inject convention block -> $target"; return 0
+    fi
+    mkdir -p "$(dirname -- "$target")"
     if [ -f "$target" ]; then
       # Match cli.js: ensure one trailing newline, then a blank separator line.
       # Add a newline unless the file is non-empty and already ends in one

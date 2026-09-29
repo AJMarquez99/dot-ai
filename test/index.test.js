@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 const idx = require('../src/lib/index-section');
+const indexCmd = require('../src/commands/index');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -234,6 +235,107 @@ check('--dry-run on a missing README prints "would create" and creates nothing',
   assert.ok(r.err.includes('would create'), r.err);
   assert.ok(!fs.existsSync(K(d, 'README.md')));
 });
+
+// --- #1: subfolder links point at a README only when one exists
+check('addEntries links a README-less subfolder to the folder itself', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['d/'], { hasReadme: () => false });
+  assert.ok(t.includes('| [d/](d/) | TODO: describe |'), t);
+});
+check('addEntries links a subfolder with a README to its README', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['d/'], { hasReadme: () => true });
+  assert.ok(t.includes('| [d/](d/README.md) | TODO: describe |'), t);
+});
+d = tmp(); scaffold(d);
+put(K(d, 'bare', 'x.md')); put(K(d, 'withreadme', 'README.md'));
+index(d, ['knowledge']);
+check('index links README-less subfolders as dir/ and others as dir/README.md', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [bare/](bare/) | TODO: describe |'), t);
+  assert.ok(t.includes('| [withreadme/](withreadme/README.md) | TODO: describe |'), t);
+});
+check('re-running index after dir/ links adds nothing', () => {
+  const before = read(K(d, 'README.md')); index(d, ['knowledge']);
+  assert.strictEqual(read(K(d, 'README.md')), before);
+});
+
+// --- #10: a row's entry may be a link outside the first column
+check('a link in a later column counts as the row entry', () => {
+  assert.deepStrictEqual(idx.listedRefs('## Index\n\n| Title | Link |\n|---|---|\n| Arch | [a.md](a.md) |\n'), ['a.md']);
+});
+check('backticked words in a description are not entries', () => {
+  assert.deepStrictEqual(idx.listedRefs('## Index\n\n| File | Answers |\n|---|---|\n| [a.md](a.md) | see `b.md` |\n'), ['a.md']);
+});
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\n\n## Index\n\n| Title | Link |\n|---|---|\n| Arch | [a.md](a.md) |\n');
+put(K(d, 'a.md'));
+index(d, ['knowledge']);
+check('index does not duplicate a row whose link is in column 2', () => {
+  assert.strictEqual((read(K(d, 'README.md')).match(/a\.md\]/g) || []).length, 1, read(K(d, 'README.md')));
+});
+
+// --- #2: seeded READMEs never carry <…> template placeholders
+const PLACEHOLDER_RE = /<the one question|<What belongs here|<neighbor>|<why it is different>/;
+for (const opt of ['skills', 'agents']) {
+  d = tmp(); scaffold(d);
+  put(path.join(d, '.ai', opt, 'thing.md'));
+  index(d, [opt]);
+  check(`seeded ${opt}/README.md has a real Answers line and no placeholders`, () => {
+    const t = read(path.join(d, '.ai', opt, 'README.md'));
+    assert.ok(t.startsWith(`<!-- BEGIN .ai-folder -->\n# ${opt}/`), t);
+    assert.ok(!PLACEHOLDER_RE.test(t), t);
+    assert.ok(/\*\*Answers: what (codified workflows|agent definitions) exist\.\*\*/.test(t), t);
+  });
+  check(`re-running index on seeded ${opt}/ is idempotent`, () => {
+    const before = read(path.join(d, '.ai', opt, 'README.md')); index(d, [opt]);
+    assert.strictEqual(read(path.join(d, '.ai', opt, 'README.md')), before);
+  });
+}
+d = tmp(); scaffold(d);
+put(path.join(d, '.ai', 'design', 'x.md'));
+index(d, ['design']);
+check('seeded README for a user folder gets a generic Answers line with its name', () => {
+  const t = read(path.join(d, '.ai', 'design', 'README.md'));
+  assert.ok(t.includes('# design/'), t);
+  assert.ok(t.includes('**Answers: design/ contents.**'), t);
+  assert.ok(!PLACEHOLDER_RE.test(t), t);
+});
+
+// --- #8: CRLF indexes stay CRLF
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\r\n\r\n## Index\r\n\r\n| File | Answers |\r\n|---|---|\r\n');
+put(K(d, 'a.md'));
+index(d, ['knowledge']);
+check('index preserves CRLF line endings when adding rows', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [a.md](a.md) | TODO: describe |\r\n'), JSON.stringify(t));
+  assert.ok(!/(^|[^\r])\n/.test(t), 'no bare LF may remain');
+});
+
+// --- final-fix #5: a CRLF fallback seed template must still seed a real
+// Answers line, not leave the "<the one question…" placeholder behind
+d = tmp(); scaffold(d);
+{
+  const realTemplateAiDir = path.join(__dirname, '..', 'template', '.ai');
+  const crlfTemplateAiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-tpl-crlf-'));
+  // Recursive copy without fs.cpSync (Node >=16.7) — the package floor is Node 14.
+  const copyDir = (s, t) => {
+    fs.mkdirSync(t, { recursive: true });
+    for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+      const a = path.join(s, e.name), b = path.join(t, e.name);
+      if (e.isDirectory()) copyDir(a, b); else fs.copyFileSync(a, b);
+    }
+  };
+  copyDir(realTemplateAiDir, crlfTemplateAiDir);
+  const seedPath = path.join(crlfTemplateAiDir, 'templates', 'folder-README.md');
+  fs.writeFileSync(seedPath, fs.readFileSync(seedPath, 'utf8').replace(/\n/g, '\r\n'));
+  fs.mkdirSync(path.join(d, '.ai', 'skills'), { recursive: true });
+  put(path.join(d, '.ai', 'skills', 'thing.md'));
+  indexCmd.run({ cwd: d, templateAiDir: crlfTemplateAiDir, folder: 'skills', private: false, dry: false });
+  check('a CRLF fallback seed template still produces a real Answers line', () => {
+    const t = read(path.join(d, '.ai', 'skills', 'README.md'));
+    assert.ok(!t.includes('<the one question'), t);
+  });
+}
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);

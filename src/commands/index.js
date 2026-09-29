@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { findRoot } = require('../lib/root');
-const { FOLDERS, OPTIONAL_FOLDERS, UNINDEXED } = require('../lib/structure');
+const { FOLDERS, OPTIONAL_FOLDERS, UNINDEXED, FOLDER_ANSWERS } = require('../lib/structure');
 const idx = require('../lib/index-section');
 
 const topOf = (ref) => ref.replace(/\/+$/, '').split('/')[0];
@@ -12,7 +12,9 @@ const topOf = (ref) => ref.replace(/\/+$/, '').split('/')[0];
 function updateIndexFile(dir, file, seed, entries, publicFile, dry) {
   const rel = path.relative(process.cwd(), file);
   const exists = fs.existsSync(file);
-  const cur = exists ? fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') : seed;
+  const raw = exists ? fs.readFileSync(file, 'utf8') : seed;
+  const crlf = /\r\n/.test(raw); // write back with the file's own line endings
+  const cur = raw.replace(/\r\n/g, '\n');
   const refs = idx.listedRefs(cur);
   for (const r of refs) {
     if (r.includes('://') || !topOf(r)) continue;
@@ -22,11 +24,19 @@ function updateIndexFile(dir, file, seed, entries, publicFile, dry) {
   const listed = new Set(refs.map(topOf));
   const missing = entries.filter((n) => !listed.has(topOf(n)));
   if (exists && missing.length === 0) return;
-  const next = idx.addEntries(cur, missing);
+  const next = idx.addEntries(cur, missing, { hasReadme: (n) => fs.existsSync(path.join(dir, n, 'README.md')) });
   const what = exists ? `add ${missing.length} index row(s) to` : `create (${missing.length} row(s))`;
   if (dry) { console.error(`  would ${what}: ${rel}`); return; }
-  fs.writeFileSync(file, next);
+  fs.writeFileSync(file, crlf ? next.replace(/\n/g, '\r\n') : next);
   console.error(`  ${exists ? `added ${missing.length} index row(s) to` : `created (${missing.length} row(s))`}: ${rel}`);
+}
+
+// Fill the generic folder-README template for `name`: heading plus a real Answers
+// paragraph, so no <…> placeholder text ever reaches a user's file.
+function seedFolderReadme(tpl, name) {
+  const answers = FOLDER_ANSWERS[name]
+    || `**Answers: ${name}/ contents.** Describe this folder's purpose here.`;
+  return tpl.replace('# <folder>/', `# ${name}/`).replace(/\*\*Answers:[\s\S]*?\n\n/, () => `${answers}\n\n`);
 }
 
 function indexFolder(aiDir, name, templateAiDir, opts) {
@@ -35,8 +45,8 @@ function indexFolder(aiDir, name, templateAiDir, opts) {
   const own = path.join(templateAiDir, name, 'README.md');
   const usingOwn = fs.existsSync(own);
   const seedPath = usingOwn ? own : path.join(templateAiDir, 'templates', 'folder-README.md');
-  let seed = fs.readFileSync(seedPath, 'utf8');
-  if (!usingOwn) seed = seed.replace('# <folder>/', `# ${name}/`);
+  let seed = fs.readFileSync(seedPath, 'utf8').replace(/\r\n/g, '\n');
+  if (!usingOwn) seed = seedFolderReadme(seed, name);
   updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, true, opts.dry);
   const privFile = path.join(dir, '_README.md');
   if (opts.private || fs.existsSync(privFile)) {

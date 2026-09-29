@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const pkg = require('../package.json');
@@ -108,6 +109,27 @@ async function promptForWiring(want) {
   }
 }
 
+// Running init/sync from inside a .ai/ layer (e.g. ~/.ai) would scaffold a nested
+// .ai/.ai/. Refuse; the parent directory is where the layer's scaffold belongs.
+// Checks both the physical cwd (process.cwd(), symlinks resolved) and the logical
+// cwd ($PWD, as the shell sees it) so a symlink in either direction can't sneak
+// past the guard. $PWD is only trusted when it actually names the current
+// directory (realpath(PWD) === realpath(cwd())) — a process spawned with a `cwd`
+// option inherits its parent's stale $PWD, which must not cause a false refusal.
+function refuseInsideAiLayer() {
+  const candidates = [process.cwd()];
+  if (process.env.PWD) {
+    try {
+      if (fs.realpathSync(process.env.PWD) === fs.realpathSync(process.cwd())) {
+        candidates.push(process.env.PWD);
+      }
+    } catch (e) { /* ignore an unresolvable $PWD */ }
+  }
+  if (!candidates.some((c) => path.basename(c) === '.ai')) return;
+  console.error("Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~).");
+  process.exit(2);
+}
+
 async function runInit(args) {
   const { want, anyFlag, noPlans, noMd, dryRun } = parseFlags(args);
 
@@ -115,6 +137,11 @@ async function runInit(args) {
     console.error('Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global.');
     process.exit(2);
   }
+
+  // install.sh refuses only after option parsing and the --no-md contradiction
+  // check, so an unknown option or a contradictory flag combo inside .ai/ must
+  // report that error — not the inside-.ai/ message — in both runners.
+  refuseInsideAiLayer();
 
   // Interactive wiring selection when no tool flags and a TTY.
   if (!anyFlag && !noMd && process.stdin.isTTY) {
@@ -165,6 +192,7 @@ async function runSync(args) {
     else if (a === '--global') isGlobal = true;
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
+  refuseInsideAiLayer();
   syncCmd.run({
     cwd: process.cwd(), templateAiDir: TEMPLATE_AI, instructionsPath: INSTRUCTIONS,
     dry: dryRun, global: isGlobal,

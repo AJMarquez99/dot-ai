@@ -25,14 +25,15 @@ GitHub Actions, with **org `AJMarquez99` / repo `dot-ai` / workflow `release.yml
 
 ## 0. Preconditions — stop if any fail
 
-1. You are on `main` with a clean tree (`git status` shows nothing to commit).
+1. You have a clean tree (any branch; `git status` shows nothing to commit).
 2. CI is green on the latest `main` commit:
    ```sh
    gh run list --branch main --limit 1
    ```
-   The `harness` (ubuntu+macos × Node 18/20), `windows`, and `package` jobs must all be green.
-   **Stop if CI is red** — do not tag a release on a failing matrix. The `package` job is the one
-   that catches the `.gitignore` → `.npmignore` rename, so it must pass before you tag.
+   The `quality` and `ci` checks must both be green (`ci` aggregates the `harness`
+   (ubuntu+macos × Node 18/20), `package`, and `windows` jobs). **Stop if CI is red** — do not tag
+   a release on a failing matrix. The `package` job is the one that catches the `.gitignore` →
+   `.npmignore` rename, so it must pass before you tag.
 
 ## 1. Prove it locally
 
@@ -64,59 +65,63 @@ Verify in the listing:
 
 Delete the local tarball once inspected: `rm ajmarquez99-dot-ai-*.tgz`.
 
-## 3. Decide and set the version
+## 3. Set the version — via a release PR
 
-Pick the next version by semver against what changed since the last release:
+`main` and `staging` are protected: changes land by PR only (`staging` squash-merges,
+`main` merge-commits; both require the `quality` and `ci` checks). Pick the next version by semver
+against what changed since the last release:
 
 - **patch** (`1.0.0` → `1.0.1`): bug fix, no behavior change for users.
 - **minor** (`1.0.0` → `1.1.0`): new command/flag/capability, backward compatible.
 - **major** (`1.0.0` → `2.0.0`): a breaking change to commands, flags, output, or the `.ai/` layout.
 
-Bump it with npm (rewrites `package.json` and creates a `vX.Y.Z` commit + tag):
+Confirm the slot is free (`npm view @ajmarquez99/dot-ai versions`), then:
 
 ```sh
-npm version <patch|minor|major>
+git switch -c release/vX.Y.Z origin/staging
+npm version X.Y.Z --no-git-tag-version      # package.json only — no commit, no tag
+git commit -am "chore(release): vX.Y.Z"
+git push -u origin release/vX.Y.Z
+gh pr create --base staging --title "chore(release): vX.Y.Z"
 ```
 
-**Stop if** the chosen version already exists — check with
-`npm view @ajmarquez99/dot-ai versions`. A taken slot is gone forever; choose the next one.
+Squash-merge it once CI is green, then open the promotion PR `staging → main`
+("Release vX.Y.Z — …", listing the included PRs) and **merge** it (merge commit) once green.
 
-## 4. Push the tag — this publishes
+## 4. Tag main — this publishes
+
+Wait for CI on the `main` merge commit (`gh run list --branch main --limit 1`), then tag that
+commit and push only the tag:
 
 ```sh
-git push origin main --follow-tags
+git fetch origin
+git tag vX.Y.Z <main merge commit sha>
+git push origin vX.Y.Z
+gh run watch "$(gh run list --workflow release.yml --branch vX.Y.Z --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 
-That pushes the `vX.Y.Z` tag, which fires the **Release** workflow. Watch it:
+The **Release** workflow runs `npm test`, `npm publish --access public` (OIDC, provenance), and
+then creates the GitHub Release with generated notes. Never move a published tag.
+
+## 5. Verify
+
+npm can take a minute to show a new version (`Your package is being processed`):
 
 ```sh
-gh run list --workflow release.yml --limit 1
-gh run watch
+npm view @ajmarquez99/dot-ai version dist-tags --prefer-online
+cd "$(mktemp -d)" && npx -y @ajmarquez99/dot-ai@X.Y.Z --no-md && ls -a .ai
+gh release view vX.Y.Z      # created by the workflow — create it by hand only if the step failed
 ```
 
-The workflow runs `npm test` then `npm publish --access public` using the OIDC token. **No OTP,
-no secret, no manual publish.** If the tag and `package.json` version disagree, fix and re-tag a
-new version (never move a published tag).
-
-## 5. Verify the published release
+If the GitHub Release step didn't run (e.g. `npm publish` failed first, so the workflow never
+reached it — re-running the workflow can't help until publish succeeds), create it by hand:
 
 ```sh
-npm view @ajmarquez99/dot-ai version
-npm view @ajmarquez99/dot-ai dist-tags
+gh release create vX.Y.Z --verify-tag --generate-notes
 ```
 
-The `version` and `latest` tag should be what you just shipped. Final smoke as a real consumer:
-
-```sh
-cd "$(mktemp -d)" && npx @ajmarquez99/dot-ai@X.Y.Z --no-md && ls .ai
-```
-
-You should see the scaffolded `.ai/` folders, with `.ai/.gitignore` present (dot restored) and no
-undotted `.ai/gitignore`. Then cut the GitHub release:
-
-```sh
-gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
-```
+`.ai/.gitignore` must be present (dot restored) and no undotted `.ai/gitignore`. Delete the merged
+`release/vX.Y.Z` branch (local and remote).
 
 ## Manual fallback (workflow unavailable)
 

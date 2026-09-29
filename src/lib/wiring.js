@@ -12,21 +12,45 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows).
 function homeDir() { return process.env.HOME || os.homedir(); }
 
+// Same line-based marker state machine as install.sh's block_ok() + replacement
+// awk: split into records the way awk does, trim each the same way (CR then
+// surrounding spaces/tabs), require well-formed non-nested BEGIN/END pairs, and
+// replace every pair's contents with `block` — never a regex against raw text,
+// so the two runners can't diverge on where a line boundary or `$` falls.
 function inject(target, block, dry) {
-  if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (fs.existsSync(target)) {
-    const cur = fs.readFileSync(target, 'utf8');
-    if (cur.includes(BEGIN)) {
-      const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}`);
-      fs.writeFileSync(target, cur.replace(re, block));
-      console.error(`  updated block in: ${target}`);
+  const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
+  if (cur !== null && cur.includes(BEGIN)) {
+    const recs = cur.split('\n');
+    if (cur.endsWith('\n')) recs.pop(); // awk records: a trailing \n ends the last record
+    const norm = (l) => l.replace(/\r$/, '').replace(/^[ \t]+|[ \t]+$/g, '');
+    let inb = false, n = 0, ok = true;
+    for (const r of recs) {
+      const l = norm(r);
+      if (l === BEGIN) { if (inb) { ok = false; break; } inb = true; }
+      else if (l === END) { if (!inb) { ok = false; break; } inb = false; n++; }
+    }
+    if (!ok || inb || n === 0) {
+      console.error(`  warning: ${target} has an incomplete or malformed convention block — not modified`);
       return;
     }
-    fs.writeFileSync(target, cur.replace(/\n?$/, '\n') + '\n' + block + '\n');
-  } else {
-    fs.writeFileSync(target, block + '\n');
+    const out = []; let skip = false;
+    for (const r of recs) {
+      const l = norm(r);
+      if (l === BEGIN) { out.push(...block.split('\n')); skip = true; continue; }
+      if (l === END) { skip = false; continue; }
+      if (!skip) out.push(r);
+    }
+    const next = out.map((l) => `${l}\n`).join(''); // awk prints every record with \n
+    if (next === cur) { console.error(`  unchanged: ${target}`); return; }
+    if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
+    fs.writeFileSync(target, next);
+    console.error(`  updated block in: ${target}`);
+    return;
   }
+  if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  if (cur !== null) fs.writeFileSync(target, cur.replace(/\n?$/, '\n') + '\n' + block + '\n');
+  else fs.writeFileSync(target, block + '\n');
   console.error(`  appended block to: ${target}`);
 }
 

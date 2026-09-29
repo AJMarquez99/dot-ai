@@ -37,12 +37,15 @@ function diagnose(aiDir) {
   for (const name of fs.readdirSync(aiDir)) {
     const full = path.join(aiDir, name);
     if (!fs.statSync(full).isDirectory()) continue;
-    if (name.startsWith('_') || isCanonical(name)) continue;
+    if (name.startsWith('_') || isCanonical(name) || name === '.ai') continue;
     const entries = fs.readdirSync(full);
     if (entries.every((e) => e === 'README.md' || e === '.gitignore')) {
       problems.push(`stale folder (sync-removable): ${name}/`);
     }
   }
+
+  // 6. A nested .ai/.ai/ — from running init/sync inside the layer (pre-1.1.2).
+  if (has('.ai')) problems.push('nested .ai/.ai/ found — likely from running init/sync inside .ai/; move its contents up and remove it');
 
   return problems;
 }
@@ -140,7 +143,7 @@ function diagnoseIgnore(aiDir) {
     const tracked = ls.out.split('\0').filter(Boolean)
       .filter((f) => f.split('/').some((seg) => seg.startsWith('_')));
     for (const t of tracked.slice(0, 5)) {
-      problems.push(`_-prefixed path is already tracked by git, so the rule cannot protect it: ${t}`);
+      problems.push(`_-prefixed path is tracked by git, so the _* rule does not apply to it: ${t} — if it should be private, 'git rm --cached' it`);
     }
     if (tracked.length > 5) {
       problems.push(`...and ${tracked.length - 5} more tracked _-prefixed path(s)`);
