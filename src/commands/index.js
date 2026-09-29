@@ -45,7 +45,7 @@ function indexFolder(aiDir, name, templateAiDir, opts) {
   const own = path.join(templateAiDir, name, 'README.md');
   const usingOwn = fs.existsSync(own);
   const seedPath = usingOwn ? own : path.join(templateAiDir, 'templates', 'folder-README.md');
-  let seed = fs.readFileSync(seedPath, 'utf8');
+  let seed = fs.readFileSync(seedPath, 'utf8').replace(/\r\n/g, '\n');
   if (!usingOwn) seed = seedFolderReadme(seed, name);
   updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, true, opts.dry);
   const privFile = path.join(dir, '_README.md');

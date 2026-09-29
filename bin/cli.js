@@ -131,13 +131,17 @@ function refuseInsideAiLayer() {
 }
 
 async function runInit(args) {
-  refuseInsideAiLayer();
   const { want, anyFlag, noPlans, noMd, dryRun } = parseFlags(args);
 
   if (noMd && (want.claude || want.gemini || want.codex || want.global)) {
     console.error('Error: --no-md cannot be combined with --claude/--gemini/--codex/--all/--global.');
     process.exit(2);
   }
+
+  // install.sh refuses only after option parsing and the --no-md contradiction
+  // check, so an unknown option or a contradictory flag combo inside .ai/ must
+  // report that error — not the inside-.ai/ message — in both runners.
+  refuseInsideAiLayer();
 
   // Interactive wiring selection when no tool flags and a TTY.
   if (!anyFlag && !noMd && process.stdin.isTTY) {
@@ -182,13 +186,13 @@ async function runWire(args) {
 }
 
 async function runSync(args) {
-  refuseInsideAiLayer();
   let dryRun = false, isGlobal = false;
   for (const a of args) {
     if (a === '--dry-run') dryRun = true;
     else if (a === '--global') isGlobal = true;
     else { console.error(`Unknown option: ${a}`); process.exit(2); }
   }
+  refuseInsideAiLayer();
   syncCmd.run({
     cwd: process.cwd(), templateAiDir: TEMPLATE_AI, instructionsPath: INSTRUCTIONS,
     dry: dryRun, global: isGlobal,

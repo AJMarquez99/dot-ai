@@ -432,6 +432,36 @@ end_cr_space_case() {
   pass "$name (end cr space)"
 }
 
+# (#1) A UTF-8 BOM immediately before the BEGIN marker makes the line not a
+# real marker line — macOS BWK awk collates in a UTF-8 locale, so without
+# LC_ALL=C the BOM can be treated as insignificant and the line falsely
+# matches; both runners must agree it's malformed: warn, leave the file
+# untouched, exit 0.
+bom_marker_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: BOM-marker run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: BOM-marker file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for BOM-marker"
+  cd /; rm -rf "$work"
+  pass "$name (bom marker)"
+}
+
+# Cross-runner byte parity for the BOM-adjacent-marker case (#1): identical
+# BOM-prefixed input must produce byte-identical (untouched) output in both.
+bom_marker_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > "$a/CLAUDE.md"
+  printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "BOM marker parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "BOM marker parity"
+}
+
 end_cr_space_parity_case() {
   a=$(mktemp -d); b=$(mktemp -d)
   printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\r \nAFTER\n' > "$a/CLAUDE.md"
@@ -472,6 +502,18 @@ inside_ai_case() {
   grep -qF "inside a .ai/ layer" "$work/out" || fail "$name: no inside-.ai/ message"
   [ -e "$work/.ai/.ai" ] && fail "$name: created nested .ai/.ai"
   rm -rf "$work"
+
+  # (final-fix #2) Option parsing happens before the .ai/-layer guard: an
+  # unknown flag inside .ai/ must report "Unknown option" (exit 2), the same
+  # as outside .ai/ — not the inside-.ai/ message — in both runners.
+  work=$(mktemp -d); mkdir -p "$work/.ai"
+  rc=0
+  ( cd "$work/.ai" && $runner --bogus >"$work/out2" 2>&1 ) || rc=$?
+  [ "$rc" -eq 2 ] || fail "$name: --bogus inside .ai/ exited $rc, want 2"
+  grep -qF 'Unknown option: --bogus' "$work/out2" || fail "$name: --bogus inside .ai/ did not report Unknown option"
+  [ -e "$work/.ai/.ai" ] && fail "$name: --bogus inside .ai/ created nested .ai/.ai"
+  rm -rf "$work"
+
   pass "$name (inside .ai/ refused)"
 }
 
@@ -562,6 +604,9 @@ end_no_trailing_newline_parity_case
 end_cr_space_case "install.sh" "sh $REPO_ROOT/install.sh"
 end_cr_space_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 end_cr_space_parity_case
+bom_marker_case "install.sh" "sh $REPO_ROOT/install.sh"
+bom_marker_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+bom_marker_parity_case
 inject_newline_parity_case
 inside_ai_case "install.sh" "sh $REPO_ROOT/install.sh"
 inside_ai_case "cli.js"     "node $REPO_ROOT/bin/cli.js"

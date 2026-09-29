@@ -180,7 +180,7 @@ codex_target() {
 # nested inside an open block, and at least one complete pair. Must match
 # wiring.js's inject() scan exactly (same trim, same state machine) — see #5
 # parity fix (structural validation replaces line-count/marker-presence checks).
-block_ok() { awk -v b="$BEGIN" -v e="$END" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{exit (bad||inb||n==0)}' "$1"; }
+block_ok() { LC_ALL=C awk -v b="$BEGIN" -v e="$END" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{exit (bad||inb||n==0)}' "$1"; }
 
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
@@ -196,7 +196,7 @@ inject() {
       return 0
     fi
     tmp=$(mktemp)
-    awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
+    LC_ALL=C awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
       { l=$0; sub(/\r$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l) }
       l==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
       l==e {skip=0; next}

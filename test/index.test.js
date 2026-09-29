@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 const idx = require('../src/lib/index-section');
+const indexCmd = require('../src/commands/index');
 
 const CLI = path.join(__dirname, '..', 'bin', 'cli.js');
 let failures = 0;
@@ -309,6 +310,24 @@ check('index preserves CRLF line endings when adding rows', () => {
   assert.ok(t.includes('| [a.md](a.md) | TODO: describe |\r\n'), JSON.stringify(t));
   assert.ok(!/(^|[^\r])\n/.test(t), 'no bare LF may remain');
 });
+
+// --- final-fix #5: a CRLF fallback seed template must still seed a real
+// Answers line, not leave the "<the one question…" placeholder behind
+d = tmp(); scaffold(d);
+{
+  const realTemplateAiDir = path.join(__dirname, '..', 'template', '.ai');
+  const crlfTemplateAiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-tpl-crlf-'));
+  fs.cpSync(realTemplateAiDir, crlfTemplateAiDir, { recursive: true });
+  const seedPath = path.join(crlfTemplateAiDir, 'templates', 'folder-README.md');
+  fs.writeFileSync(seedPath, fs.readFileSync(seedPath, 'utf8').replace(/\n/g, '\r\n'));
+  fs.mkdirSync(path.join(d, '.ai', 'skills'), { recursive: true });
+  put(path.join(d, '.ai', 'skills', 'thing.md'));
+  indexCmd.run({ cwd: d, templateAiDir: crlfTemplateAiDir, folder: 'skills', private: false, dry: false });
+  check('a CRLF fallback seed template still produces a real Answers line', () => {
+    const t = read(path.join(d, '.ai', 'skills', 'README.md'));
+    assert.ok(!t.includes('<the one question'), t);
+  });
+}
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);
