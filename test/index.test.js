@@ -272,5 +272,43 @@ check('index does not duplicate a row whose link is in column 2', () => {
   assert.strictEqual((read(K(d, 'README.md')).match(/a\.md\]/g) || []).length, 1, read(K(d, 'README.md')));
 });
 
+// --- #2: seeded READMEs never carry <…> template placeholders
+const PLACEHOLDER_RE = /<the one question|<What belongs here|<neighbor>|<why it is different>/;
+for (const opt of ['skills', 'agents']) {
+  d = tmp(); scaffold(d);
+  put(path.join(d, '.ai', opt, 'thing.md'));
+  index(d, [opt]);
+  check(`seeded ${opt}/README.md has a real Answers line and no placeholders`, () => {
+    const t = read(path.join(d, '.ai', opt, 'README.md'));
+    assert.ok(t.startsWith(`<!-- BEGIN .ai-folder -->\n# ${opt}/`), t);
+    assert.ok(!PLACEHOLDER_RE.test(t), t);
+    assert.ok(/\*\*Answers: what (codified workflows|agent definitions) exist\.\*\*/.test(t), t);
+  });
+  check(`re-running index on seeded ${opt}/ is idempotent`, () => {
+    const before = read(path.join(d, '.ai', opt, 'README.md')); index(d, [opt]);
+    assert.strictEqual(read(path.join(d, '.ai', opt, 'README.md')), before);
+  });
+}
+d = tmp(); scaffold(d);
+put(path.join(d, '.ai', 'design', 'x.md'));
+index(d, ['design']);
+check('seeded README for a user folder gets a generic Answers line with its name', () => {
+  const t = read(path.join(d, '.ai', 'design', 'README.md'));
+  assert.ok(t.includes('# design/'), t);
+  assert.ok(t.includes('**Answers: design/ contents.**'), t);
+  assert.ok(!PLACEHOLDER_RE.test(t), t);
+});
+
+// --- #8: CRLF indexes stay CRLF
+d = tmp(); scaffold(d);
+fs.writeFileSync(K(d, 'README.md'), '# knowledge/\r\n\r\n## Index\r\n\r\n| File | Answers |\r\n|---|---|\r\n');
+put(K(d, 'a.md'));
+index(d, ['knowledge']);
+check('index preserves CRLF line endings when adding rows', () => {
+  const t = read(K(d, 'README.md'));
+  assert.ok(t.includes('| [a.md](a.md) | TODO: describe |\r\n'), JSON.stringify(t));
+  assert.ok(!/(^|[^\r])\n/.test(t), 'no bare LF may remain');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);
