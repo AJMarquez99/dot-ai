@@ -5,26 +5,28 @@ const path = require('path');
 const { findRoot } = require('../lib/root');
 const { FOLDERS, OPTIONAL_FOLDERS, UNINDEXED, FOLDER_ANSWERS } = require('../lib/structure');
 const idx = require('../lib/index-section');
+const { publicIgnored } = require('../lib/git-ignore');
 
-const topOf = (ref) => ref.replace(/\/+$/, '').split('/')[0];
-
-// Report stale / leaked entries, then add rows for unlisted `entries`.
-function updateIndexFile(dir, file, seed, entries, publicFile, dry) {
+// Report private / stale / gitignored-link entries, then add rows for unlisted `entries`.
+function updateIndexFile(dir, file, seed, entries, ignored, publicFile, dry) {
   const rel = path.relative(process.cwd(), file);
   const exists = fs.existsSync(file);
   const raw = exists ? fs.readFileSync(file, 'utf8') : seed;
   const crlf = /\r\n/.test(raw); // write back with the file's own line endings
   const cur = raw.replace(/\r\n/g, '\n');
-  const refs = idx.listedRefs(cur);
-  for (const r of refs) {
-    if (r.includes('://') || !topOf(r)) continue;
-    if (publicFile && topOf(r).startsWith('_')) console.error(`  private entry in public index: ${r} (${rel})`);
-    else if (!fs.existsSync(path.join(dir, topOf(r)))) console.error(`  stale index entry: ${r} (${rel})`);
-  }
-  const listed = new Set(refs.map(topOf));
-  const missing = entries.filter((n) => !listed.has(topOf(n)));
+  const a = idx.auditIndex({
+    text: cur, entries, ignored, isPublic: publicFile,
+    exists: (top) => fs.existsSync(path.join(dir, top)),
+  });
+  for (const r of a.privateEntries) console.error(`  private entry in public index: ${r} (${rel})`);
+  for (const r of a.stale) console.error(`  stale index entry: ${r} (${rel})`);
+  for (const r of a.linkedIgnored) console.error(`  linked entry is gitignored: ${r} (${rel}) — make it a name-only (local) row`);
+  const { missing } = a;
   if (exists && missing.length === 0) return;
-  const next = idx.addEntries(cur, missing, { hasReadme: (n) => fs.existsSync(path.join(dir, n, 'README.md')) });
+  const next = idx.addEntries(cur, missing, {
+    hasReadme: (n) => fs.existsSync(path.join(dir, n, 'README.md')),
+    isLocal: (n) => ignored.has(n),
+  });
   const what = exists ? `add ${missing.length} index row(s) to` : `create (${missing.length} row(s))`;
   if (dry) { console.error(`  would ${what}: ${rel}`); return; }
   fs.writeFileSync(file, crlf ? next.replace(/\n/g, '\r\n') : next);
@@ -47,10 +49,15 @@ function indexFolder(aiDir, name, templateAiDir, opts) {
   const seedPath = usingOwn ? own : path.join(templateAiDir, 'templates', 'folder-README.md');
   let seed = fs.readFileSync(seedPath, 'utf8').replace(/\r\n/g, '\n');
   if (!usingOwn) seed = seedFolderReadme(seed, name);
-  updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, true, opts.dry);
+  const pubGit = publicIgnored(dir, pub);
+  if (pubGit.note && !opts.gitNoted) {
+    console.error(`  note: git status unavailable (${pubGit.note}) — gitignored files are indexed as links`);
+    opts.gitNoted = true;
+  }
+  updateIndexFile(dir, path.join(dir, 'README.md'), seed, pub, pubGit.ignored, true, opts.dry);
   const privFile = path.join(dir, '_README.md');
   if (opts.private || fs.existsSync(privFile)) {
-    updateIndexFile(dir, privFile, idx.privateSeed(), priv, false, opts.dry);
+    updateIndexFile(dir, privFile, idx.privateSeed(), priv, new Set(), false, opts.dry);
   }
 }
 
