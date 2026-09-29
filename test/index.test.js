@@ -317,7 +317,7 @@ d = tmp(); scaffold(d);
 {
   const realTemplateAiDir = path.join(__dirname, '..', 'template', '.ai');
   const crlfTemplateAiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-tpl-crlf-'));
-  // Recursive copy without fs.cpSync (Node >=16.7) — the package floor is Node 14.
+  // Recursive copy without fs.cpSync (Node >=16.7) — kept manual; the package floor is Node 18.
   const copyDir = (s, t) => {
     fs.mkdirSync(t, { recursive: true });
     for (const e of fs.readdirSync(s, { withFileTypes: true })) {

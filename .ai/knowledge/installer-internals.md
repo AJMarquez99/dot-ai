@@ -48,7 +48,7 @@ project — full explanation in [`npm-packaging-gotchas.md`](./npm-packaging-got
 guards both halves: the template must contain no dotted ignore file (`template_ignore_naming_case`),
 and the installed project must contain `.ai/.gitignore` but never a leaked `.ai/gitignore`.
 
-Under `--no-md`, the scaffold is copied and then the installer stops (the `NO_MD` branch in `install.sh`, `runInit` in `cli.js`) — no config, no settings.
+Under `--no-md`, the scaffold is copied and then the installer stops (the `NO_MD` branch in `install.sh`; the early return in `init.run`, `src/commands/init.js`) — no config, no settings.
 
 ## Block injection — the trickiest parity point
 
@@ -105,7 +105,7 @@ If you touch newline handling on either side, run the parity case — it's the c
 
 Note the shell reads `agent-instructions.md` inline per-inject via `cat` inside the block-file
 construction in `inject`; JS reads it once into `instructions` with `.trimEnd()` and reuses it
-(`runInit`/`runWire`). The `.trimEnd()` plus the shell's `printf '%s\n'` framing are what keep the marker
+(`wire.run` in `src/commands/wire.js`; `sync.js` reads it separately). `runInit`/`runWire` in `cli.js` only build `want` and delegate. The `.trimEnd()` plus the shell's `printf '%s\n'` framing are what keep the marker
 lines aligned.
 
 ## Path resolution and `--global`
@@ -114,13 +114,13 @@ Local is the default; `--global` redirects the MD target to the user home.
 
 **Shell.** `md_target` takes a filename and a global subdir and returns either the bare filename or
 `$HOME/<subdir>/<file>` (`md_target`). Codex is special-cased in `codex_target`
-(`codex_target`) because its global home honors `$CODEX_HOME`, defaulting to `~/.codex`. Targets
-are selected by the `inject` calls at the end of `install.sh`.
+because its global home honors `$CODEX_HOME`, defaulting to `~/.codex`. Targets
+are selected by the three `inject` calls that follow the `inject` definition, before the `merge_json` section.
 
-**JS.** The equivalents are `mdTarget(file, subdir)` (`bin/cli.js`), `homeDir()` (`src/lib/cascade.js` / `wiring.js`, which
+**JS.** The equivalents are `mdTarget(file, subdir)` (a closure in `wire.run`, `src/commands/wire.js`), `homeDir()` (`src/lib/cascade.js` / `wiring.js`, which
 prefers `$HOME` so tests can redirect it and falls back to `os.homedir()` since Windows has no
-`$HOME`), `codexHome()` (`$CODEX_HOME || ~/.codex`), and `codexTarget()`.
-Targets are injected in `runInit`/`runWire`. The `$CODEX_HOME` behavior is asserted by `codex_home_case`
+`$HOME`), `codexHome()` (`$CODEX_HOME || ~/.codex`), and `codexTarget()` (also closures in `wire.run`).
+Targets are injected by `wire.run`, which `init.run` delegates to. The `$CODEX_HOME` behavior is asserted by `codex_home_case`
 and a smoke check.
 
 `--global` with no tool selected prints the "no effect without a tool flag" hint and continues
@@ -186,6 +186,6 @@ Triggered only when `anyFlag` is false **and** a TTY is available (the `/dev/tty
 
 The gating matters: local/global and plans are meaningless with no tool selected, so those prompts
 never appear in that case. For flagged or non-interactive runs the plans setting defaults to **on**
-(use `--no-plans` to skip) — see the `NO_PLANS` handling in `install.sh` and `writePlansSetting`. With no flags and no TTY, the
+(use `--no-plans` to skip) — see the `NO_PLANS` handling in `install.sh` and the `wantPlans` logic in `runInit` (`bin/cli.js`); `writePlansSetting` only writes what it is told. With no flags and no TTY, the
 installer scaffolds and prints "re-run with a target flag" guidance instead of prompting
 (the non-TTY branch in `install.sh` and `runInit`).
