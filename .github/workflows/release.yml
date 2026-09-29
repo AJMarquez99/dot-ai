@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest          # GitHub-hosted runner required (OIDC unsupported on self-hosted)
     permissions:
       id-token: write               # mint the OIDC token for trusted publishing
-      contents: read
+      contents: write               # create the GitHub Release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,3 +38,8 @@ jobs:
       # dot-ai is dependency-free; `npm test` is the install/parity harness (no npm ci).
       - run: npm test
       - run: npm publish --access public  # provenance auto-generated (public repo + public package)
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Idempotent: skip if a release for this tag already exists.
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes

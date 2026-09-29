@@ -10,9 +10,8 @@ A `lesson/` graduates into a guideline here, then the lesson is deleted.
 
 ## Index
 
-- [`parity.md`](./parity.md) — the core rule: `install.sh` and `bin/cli.js` must behave identically,
-  and every change lands in both.
-- [`contributing.md`](./contributing.md) — POSIX-sh and Node conventions, the `_`-prefix and
-  ship-as-`gitignore` rules, line endings, and commit/PR expectations.
-- [`testing.md`](./testing.md) — the testing bar: TDD against both runners, the three test layers,
-  and a green CI matrix before merge.
+| File | Answers |
+|---|---|
+| [parity.md](./parity.md) | The core rule: `install.sh` and `bin/cli.js` must behave identically, and every change lands in both. |
+| [contributing.md](./contributing.md) | POSIX-sh and Node conventions, the `_`-prefix and ship-as-`gitignore` rules, line endings, and commit/PR expectations. |
+| [testing.md](./testing.md) | The testing bar: TDD against both runners, the three test layers, and a green CI matrix before merge. |
