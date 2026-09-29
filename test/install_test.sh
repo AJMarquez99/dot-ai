@@ -464,6 +464,18 @@ inject_newline_parity_case() {
 
 # Guard the npm trap: npm renames .gitignore -> .npmignore on install, so the
 # template must ship its ignore files as `gitignore` (no dot), never `.gitignore`.
+# init inside a .ai/ layer is refused and creates no nested .ai/.ai (#15).
+inside_ai_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); mkdir -p "$work/.ai"; cd "$work/.ai"
+  rc=0; $runner --no-md >"$work/out" 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "$name: init inside .ai/ exited $rc, want 2"
+  grep -qF "inside a .ai/ layer" "$work/out" || fail "$name: no inside-.ai/ message"
+  [ -e "$work/.ai/.ai" ] && fail "$name: created nested .ai/.ai"
+  cd /; rm -rf "$work"
+  pass "$name (inside .ai/ refused)"
+}
+
 template_ignore_naming_case() {
   bad=$(cd "$REPO_ROOT" && find template -name '.gitignore' -o -name '.npmignore')
   [ -z "$bad" ] || fail "template ships a dotted ignore file npm will mangle: $bad"
@@ -523,4 +535,6 @@ end_cr_space_case "install.sh" "sh $REPO_ROOT/install.sh"
 end_cr_space_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 end_cr_space_parity_case
 inject_newline_parity_case
+inside_ai_case "install.sh" "sh $REPO_ROOT/install.sh"
+inside_ai_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 printf 'ALL PASS\n'

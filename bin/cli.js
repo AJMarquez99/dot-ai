@@ -108,7 +108,16 @@ async function promptForWiring(want) {
   }
 }
 
+// Running init/sync from inside a .ai/ layer (e.g. ~/.ai) would scaffold a nested
+// .ai/.ai/. Refuse; the parent directory is where the layer's scaffold belongs.
+function refuseInsideAiLayer() {
+  if (path.basename(process.cwd()) !== '.ai') return;
+  console.error("Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~).");
+  process.exit(2);
+}
+
 async function runInit(args) {
+  refuseInsideAiLayer();
   const { want, anyFlag, noPlans, noMd, dryRun } = parseFlags(args);
 
   if (noMd && (want.claude || want.gemini || want.codex || want.global)) {
@@ -159,6 +168,7 @@ async function runWire(args) {
 }
 
 async function runSync(args) {
+  refuseInsideAiLayer();
   let dryRun = false, isGlobal = false;
   for (const a of args) {
     if (a === '--dry-run') dryRun = true;

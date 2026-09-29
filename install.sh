@@ -86,6 +86,11 @@ if [ "$NO_MD" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_GEMINI" -eq 1 ] || [
   exit 2
 fi
 
+# Running inside a .ai/ layer (e.g. ~/.ai) would scaffold a nested .ai/.ai/.
+case "$(basename -- "$PWD")" in
+  .ai) log "Error: you're inside a .ai/ layer — run from its parent directory (for ~/.ai: cd ~)."; exit 2 ;;
+esac
+
 # 1) Copy template/.ai into cwd, never clobbering existing files.
 log "Installing .ai/ scaffold…"
 ( cd "$SRC/template" && find .ai -type f -print ) | while IFS= read -r rel; do

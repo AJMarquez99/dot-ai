@@ -113,7 +113,7 @@ execFileSync('git', ['add', '-f', '.ai/knowledge/_secret.md'], { cwd: d, stdio: 
 check('doctor flags a force-added _-prefixed path that git already tracks', () => {
   const r = doctor(d);
   assert.ok(!r.ok, 'should exit non-zero');
-  assert.ok(/already tracked/.test(r.stderr), 'should name the tracked _-prefixed path');
+  assert.ok(/tracked by git, so the _\* rule does not apply to it/.test(r.stderr), 'should name the tracked _-prefixed path');
   assert.ok(/_secret\.md/.test(r.stderr), 'should name the file');
   assert.ok(/git rm --cached/.test(r.stderr), 'should hint the git-side fix');
 });
@@ -135,6 +135,14 @@ check('doctor names a later negating line in .ai/.gitignore as the cause', () =>
   assert.ok(/NOT in force/.test(r.stderr), r.stderr);
   assert.ok(/later negating line in \.ai\/\.gitignore/.test(r.stderr), `should point at .ai/.gitignore:\n${r.stderr}`);
   assert.ok(!/parent \.gitignore/.test(r.stderr), 'a parent .gitignore cannot override .ai/.gitignore');
+});
+
+d = tmp(); scaffold(d);
+fs.mkdirSync(path.join(d, '.ai', '.ai', 'knowledge'), { recursive: true });
+check('doctor flags a nested .ai/.ai/', () => {
+  const r = doctor(d);
+  assert.ok(!r.ok, 'should exit non-zero');
+  assert.ok(/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
 });
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');

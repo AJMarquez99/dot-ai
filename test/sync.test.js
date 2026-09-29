@@ -222,5 +222,17 @@ check('inject writes $-patterns literally', () => {
   assert.ok(fs.readFileSync(cfg, 'utf8').includes('cost $& and $1'));
 });
 
+// #15: sync and bare init refuse to run inside a .ai/ layer
+d = tmp();
+fs.mkdirSync(path.join(d, '.ai'));
+for (const args of [['sync'], ['init', '--no-md'], ['--no-md']]) {
+  const res = spawnSync(process.execPath, [CLI, ...args], { cwd: path.join(d, '.ai'), encoding: 'utf8' });
+  check(`'${args.join(' ')}' inside .ai/ is refused (exit 2, no nested .ai/)`, () => {
+    assert.strictEqual(res.status, 2, res.stderr);
+    assert.ok(res.stderr.includes('inside a .ai/ layer'), res.stderr);
+    assert.ok(!fs.existsSync(path.join(d, '.ai', '.ai')));
+  });
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSYNC OK');
 process.exit(failures ? 1 : 0);
