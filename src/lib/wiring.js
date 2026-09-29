@@ -15,7 +15,11 @@ function homeDir() { return process.env.HOME || os.homedir(); }
 function inject(target, block, dry) {
   const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
   if (cur !== null && cur.includes(BEGIN)) {
-    const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}`);
+    if (!cur.includes(END)) {
+      console.error(`  warning: ${target} has a BEGIN marker without END — not modified`);
+      return;
+    }
+    const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}\\r?`);
     const next = cur.replace(re, () => block); // fn: no $-pattern expansion
     if (next === cur) { console.error(`  unchanged: ${target}`); return; }
     if (dry) { console.error(`  would inject convention block -> ${target}`); return; }

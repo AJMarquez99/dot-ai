@@ -213,6 +213,57 @@ unchanged_case() {
   pass "$name (unchanged block)"
 }
 
+# CRLF stale block (#1): a stale block in a CRLF file must be detected as stale
+# (not falsely reported unchanged) and updated in place, preserving the CRLF
+# trailer content; a second run then reports unchanged.
+crlf_stale_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\r\n<!-- BEGIN .ai-convention -->\r\nOLD\r\n<!-- END .ai-convention -->\r\nKEEP\r\n' > CLAUDE.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: CRLF stale block run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: CRLF stale block not updated"
+  node -e '
+    const c = require("fs").readFileSync("CLAUDE.md", "utf8");
+    if (c.includes("OLD")) { console.error("stale OLD body still present"); process.exit(1); }
+    if (!c.endsWith("KEEP\r\n")) { console.error("KEEP\\r trailer not preserved"); process.exit(1); }
+  ' || fail "$name: CRLF stale block content wrong after update"
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: CRLF block re-run exited non-zero"
+  printf '%s\n' "$out" | grep -qE 'unchanged: .*CLAUDE\.md' || fail "$name: CRLF block re-run did not report unchanged"
+  cd /; rm -rf "$work"
+  pass "$name (crlf stale block)"
+}
+
+# CRLF stale block byte parity: same CRLF stale input, both installers must produce
+# byte-identical output (regression guard for CR-stripped marker matching, #1).
+crlf_stale_parity_case() {
+  a=$(mktemp -d); b=$(mktemp -d)
+  printf '# t\r\n<!-- BEGIN .ai-convention -->\r\nOLD\r\n<!-- END .ai-convention -->\r\nKEEP\r\n' > "$a/CLAUDE.md"
+  printf '# t\r\n<!-- BEGIN .ai-convention -->\r\nOLD\r\n<!-- END .ai-convention -->\r\nKEEP\r\n' > "$b/CLAUDE.md"
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "CRLF stale block parity: install.sh vs cli.js differ"
+  rm -rf "$a" "$b"
+  pass "CRLF stale block parity"
+}
+
+# BEGIN marker with no END (#3, data loss guard): must not modify the file —
+# just warn and exit 0, in a real run and in --dry-run.
+begin_no_end_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nOLD\nAFTER\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: BEGIN-without-END run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: BEGIN-without-END file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*BEGIN marker without END' || fail "$name: no warning for BEGIN-without-END"
+  out=$($runner --claude --no-plans --dry-run 2>&1) || fail "$name: BEGIN-without-END dry-run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: BEGIN-without-END dry-run modified the file"
+  printf '%s\n' "$out" | grep -qE 'warning:.*BEGIN marker without END' || fail "$name: dry-run did not warn for BEGIN-without-END"
+  printf '%s\n' "$out" | grep -qF 'would inject' && fail "$name: dry-run previewed an inject for BEGIN-without-END"
+  cd /; rm -rf "$work"
+  pass "$name (begin-no-end)"
+}
+
 # inject() output is byte-identical between the two installers for a target
 # that lacks a trailing newline (regression guard for newline separation).
 inject_newline_parity_case() {
@@ -267,5 +318,10 @@ dryrun_combo_case "install.sh" "sh $REPO_ROOT/install.sh"
 dryrun_combo_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 unchanged_case "install.sh" "sh $REPO_ROOT/install.sh"
 unchanged_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+crlf_stale_case "install.sh" "sh $REPO_ROOT/install.sh"
+crlf_stale_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+crlf_stale_parity_case
+begin_no_end_case "install.sh" "sh $REPO_ROOT/install.sh"
+begin_no_end_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 inject_newline_parity_case
 printf 'ALL PASS\n'

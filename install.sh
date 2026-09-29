@@ -174,10 +174,16 @@ inject() {
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
+    if ! grep -qF "$END" "$target"; then
+      rm -f "$bf"
+      log "  warning: $target has a BEGIN marker without END — not modified"
+      return 0
+    fi
     tmp=$(mktemp)
     awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
-      $0==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
-      $0==e {skip=0; next}
+      { l=$0; sub(/\r$/, "", l) }
+      l==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
+      l==e {skip=0; next}
       skip!=1 {print}
     ' "$target" > "$tmp"
     if cmp -s "$tmp" "$target"; then
