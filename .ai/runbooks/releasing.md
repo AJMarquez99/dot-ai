@@ -25,14 +25,15 @@ GitHub Actions, with **org `AJMarquez99` / repo `dot-ai` / workflow `release.yml
 
 ## 0. Preconditions — stop if any fail
 
-1. You are on `main` with a clean tree (`git status` shows nothing to commit).
+1. You have a clean tree (any branch; `git status` shows nothing to commit).
 2. CI is green on the latest `main` commit:
    ```sh
    gh run list --branch main --limit 1
    ```
-   The `harness` (ubuntu+macos × Node 18/20), `windows`, and `package` jobs must all be green.
-   **Stop if CI is red** — do not tag a release on a failing matrix. The `package` job is the one
-   that catches the `.gitignore` → `.npmignore` rename, so it must pass before you tag.
+   The `quality` and `ci` checks must both be green (`ci` aggregates the `harness`
+   (ubuntu+macos × Node 18/20), `package`, and `windows` jobs). **Stop if CI is red** — do not tag
+   a release on a failing matrix. The `package` job is the one that catches the `.gitignore` →
+   `.npmignore` rename, so it must pass before you tag.
 
 ## 1. Prove it locally
 
@@ -67,9 +68,14 @@ Delete the local tarball once inspected: `rm ajmarquez99-dot-ai-*.tgz`.
 ## 3. Set the version — via a release PR
 
 `main` and `staging` are protected: changes land by PR only (`staging` squash-merges,
-`main` merge-commits; both require the `quality` and `ci` checks). Pick the version by semver
-(patch / minor / major as above), confirm the slot is free
-(`npm view @ajmarquez99/dot-ai versions`), then:
+`main` merge-commits; both require the `quality` and `ci` checks). Pick the next version by semver
+against what changed since the last release:
+
+- **patch** (`1.0.0` → `1.0.1`): bug fix, no behavior change for users.
+- **minor** (`1.0.0` → `1.1.0`): new command/flag/capability, backward compatible.
+- **major** (`1.0.0` → `2.0.0`): a breaking change to commands, flags, output, or the `.ai/` layout.
+
+Confirm the slot is free (`npm view @ajmarquez99/dot-ai versions`), then:
 
 ```sh
 git switch -c release/vX.Y.Z origin/staging
@@ -91,7 +97,7 @@ commit and push only the tag:
 git fetch origin
 git tag vX.Y.Z <main merge commit sha>
 git push origin vX.Y.Z
-gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+gh run watch "$(gh run list --workflow release.yml --branch vX.Y.Z --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 
 The **Release** workflow runs `npm test`, `npm publish --access public` (OIDC, provenance), and
@@ -105,6 +111,13 @@ npm can take a minute to show a new version (`Your package is being processed`):
 npm view @ajmarquez99/dot-ai version dist-tags --prefer-online
 cd "$(mktemp -d)" && npx -y @ajmarquez99/dot-ai@X.Y.Z --no-md && ls -a .ai
 gh release view vX.Y.Z      # created by the workflow — create it by hand only if the step failed
+```
+
+If the GitHub Release step didn't run (e.g. `npm publish` failed first, so the workflow never
+reached it — re-running the workflow can't help until publish succeeds), create it by hand:
+
+```sh
+gh release create vX.Y.Z --verify-tag --generate-notes
 ```
 
 `.ai/.gitignore` must be present (dot restored) and no undotted `.ai/gitignore`. Delete the merged

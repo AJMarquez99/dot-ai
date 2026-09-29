@@ -14,6 +14,6 @@ A runbook commonly references a script for its automatable steps.
 
 | File | Answers |
 |---|---|
-| [releasing.md](./releasing.md) | When cutting and publishing a new version of `@ajmarquez99/dot-ai` to npm (version bump, tarball inspection, publish with OTP, tag + release). |
-| [testing.md](./testing.md) | When running the test suite locally and reading its output (`npm test`, `npm run smoke`, `npm run pack-test`, shellcheck) or debugging a failing case. |
-| [add-a-flag.md](./add-a-flag.md) | When adding a new installer flag at parity across `install.sh` and `bin/cli.js` (TDD case first, both installers, matching `--help`, verify). |
+| [releasing.md](releasing.md) | When cutting and publishing a new version of `@ajmarquez99/dot-ai` to npm (version bump, tarball inspection, release PR → tag main → OIDC publish + workflow-created GitHub Release). |
+| [testing.md](testing.md) | When running the test suite locally and reading its output (`npm test`, `npm run smoke`, `npm run pack-test`, shellcheck) or debugging a failing case. |
+| [add-a-flag.md](add-a-flag.md) | When adding a new installer flag at parity across `install.sh` and `bin/cli.js` (TDD case first, both installers, matching `--help`, verify). |
