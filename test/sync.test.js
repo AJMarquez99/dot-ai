@@ -212,5 +212,15 @@ check('sync refreshes duplicate blocks and warns', () => {
   assert.ok(/warning: 2 managed blocks in .*notes\/README\.md/.test(resDup.stderr), resDup.stderr);
 });
 
+// #3 regression guard: block text with $-patterns is injected literally
+d = tmp();
+const wiring = require('../src/lib/wiring');
+const cfg = path.join(d, 'CLAUDE.md');
+fs.writeFileSync(cfg, '<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\n');
+wiring.inject(cfg, '<!-- BEGIN .ai-convention -->\ncost $& and $1\n<!-- END .ai-convention -->', false);
+check('inject writes $-patterns literally', () => {
+  assert.ok(fs.readFileSync(cfg, 'utf8').includes('cost $& and $1'));
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSYNC OK');
 process.exit(failures ? 1 : 0);

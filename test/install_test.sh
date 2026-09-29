@@ -193,6 +193,26 @@ dryrun_combo_case() {
   pass "$name (dry-run combos)"
 }
 
+# A current convention block is neither rewritten nor previewed as an inject (#3).
+unchanged_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  $runner --claude --no-plans >/dev/null 2>&1
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1)
+  printf '%s\n' "$out" | grep -qE 'unchanged: .*CLAUDE\.md' || fail "$name: re-run did not report unchanged"
+  printf '%s\n' "$out" | grep -qF 'updated block in' && fail "$name: re-run rewrote a current block"
+  cmp -s CLAUDE.md before.md || fail "$name: current block was modified"
+  out=$($runner --claude --no-plans --dry-run 2>&1)
+  printf '%s\n' "$out" | grep -qE 'unchanged: .*CLAUDE\.md' || fail "$name: dry-run on a current block did not say unchanged"
+  printf '%s\n' "$out" | grep -qF 'would inject' && fail "$name: dry-run previewed an inject into a current block"
+  printf '<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\n' > CLAUDE.md
+  out=$($runner --claude --no-plans --dry-run 2>&1)
+  printf '%s\n' "$out" | grep -qF 'would inject' || fail "$name: dry-run on a stale block did not preview the inject"
+  cd /; rm -rf "$work"
+  pass "$name (unchanged block)"
+}
+
 # inject() output is byte-identical between the two installers for a target
 # that lacks a trailing newline (regression guard for newline separation).
 inject_newline_parity_case() {
@@ -245,5 +265,7 @@ codex_home_case   "install.sh" "sh $REPO_ROOT/install.sh"
 codex_home_case   "cli.js"     "node $REPO_ROOT/bin/cli.js"
 dryrun_combo_case "install.sh" "sh $REPO_ROOT/install.sh"
 dryrun_combo_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+unchanged_case "install.sh" "sh $REPO_ROOT/install.sh"
+unchanged_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 inject_newline_parity_case
 printf 'ALL PASS\n'

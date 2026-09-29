@@ -13,20 +13,20 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function homeDir() { return process.env.HOME || os.homedir(); }
 
 function inject(target, block, dry) {
+  const cur = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
+  if (cur !== null && cur.includes(BEGIN)) {
+    const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}`);
+    const next = cur.replace(re, () => block); // fn: no $-pattern expansion
+    if (next === cur) { console.error(`  unchanged: ${target}`); return; }
+    if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
+    fs.writeFileSync(target, next);
+    console.error(`  updated block in: ${target}`);
+    return;
+  }
   if (dry) { console.error(`  would inject convention block -> ${target}`); return; }
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (fs.existsSync(target)) {
-    const cur = fs.readFileSync(target, 'utf8');
-    if (cur.includes(BEGIN)) {
-      const re = new RegExp(`${escapeRe(BEGIN)}[\\s\\S]*?${escapeRe(END)}`);
-      fs.writeFileSync(target, cur.replace(re, block));
-      console.error(`  updated block in: ${target}`);
-      return;
-    }
-    fs.writeFileSync(target, cur.replace(/\n?$/, '\n') + '\n' + block + '\n');
-  } else {
-    fs.writeFileSync(target, block + '\n');
-  }
+  if (cur !== null) fs.writeFileSync(target, cur.replace(/\n?$/, '\n') + '\n' + block + '\n');
+  else fs.writeFileSync(target, block + '\n');
   console.error(`  appended block to: ${target}`);
 }
 

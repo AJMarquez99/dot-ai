@@ -171,11 +171,6 @@ codex_target() {
 # values passed with -v, and getline also handles a block that isn't at EOF.
 inject() {
   target="$1"
-  if [ "$DRY" -eq 1 ]; then
-    log "  would inject convention block -> $target"
-    return 0
-  fi
-  mkdir -p "$(dirname -- "$target")"
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
@@ -185,9 +180,19 @@ inject() {
       $0==e {skip=0; next}
       skip!=1 {print}
     ' "$target" > "$tmp"
+    if cmp -s "$tmp" "$target"; then
+      rm -f "$tmp" "$bf"; log "  unchanged: $target"; return 0
+    fi
+    if [ "$DRY" -eq 1 ]; then
+      rm -f "$tmp" "$bf"; log "  would inject convention block -> $target"; return 0
+    fi
     mv "$tmp" "$target"
     log "  updated block in: $target"
   else
+    if [ "$DRY" -eq 1 ]; then
+      rm -f "$bf"; log "  would inject convention block -> $target"; return 0
+    fi
+    mkdir -p "$(dirname -- "$target")"
     if [ -f "$target" ]; then
       # Match cli.js: ensure one trailing newline, then a blank separator line.
       # Add a newline unless the file is non-empty and already ends in one
