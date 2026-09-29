@@ -66,5 +66,14 @@ check('a v1.0.0 legacy snapshot exists for every canonical folder', () => {
   assert.strictEqual(fr.legacyText('nope'), null);
 });
 
+check('every duplicate managed block is refreshed and counted', () => {
+  const cur = `${B}\nOLD1\n${E}\n\nmiddle keeps\n\n${B}\nOLD2\n${E}\n`;
+  const r = fr.planRefresh(cur, TPL, LEGACY);
+  assert.strictEqual(r.blocks, 2);
+  assert.ok(!r.text.includes('OLD1') && !r.text.includes('OLD2'), r.text);
+  assert.ok(r.text.includes('middle keeps'));
+  assert.strictEqual(r.text.split(B).length - 1, 2, 'duplicates are refreshed, never deleted');
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nFOLDER-README OK');
 process.exit(failures ? 1 : 0);

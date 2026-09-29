@@ -10,6 +10,7 @@ const { escapeRe } = require('./wiring');
 const FOLDER_BEGIN = '<!-- BEGIN .ai-folder -->';
 const FOLDER_END = '<!-- END .ai-folder -->';
 const BLOCK_RE = new RegExp(`${escapeRe(FOLDER_BEGIN)}[\\s\\S]*?${escapeRe(FOLDER_END)}`);
+const BLOCK_RE_ALL = new RegExp(BLOCK_RE.source, 'g');
 const LEGACY_DIR = path.join(__dirname, 'legacy-readmes');
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -33,29 +34,33 @@ function planRefresh(current, template, legacy) {
   const tpl = lf(template);
   const block = extractBlock(tpl);
   if (!block) throw new Error('template README has no .ai-folder block');
-  if (extractBlock(cur) !== null) {
-    const next = cur.replace(BLOCK_RE, () => block); // fn: no $-pattern expansion
-    return { action: next === cur ? 'unchanged' : 'updated', text: next };
+  const blocks = (cur.match(BLOCK_RE_ALL) || []).length;
+  if (blocks > 0) {
+    // Every block is refreshed (duplicates stay; the caller warns). Fn: no $-expansion.
+    const next = cur.replace(BLOCK_RE_ALL, () => block);
+    return { action: next === cur ? 'unchanged' : 'updated', text: next, blocks };
   }
   if (legacy && cur.startsWith(legacy)) {
     const rest = cur.slice(legacy.length).trim();
-    return { action: 'migrated', text: rest ? `${block}\n\n${rest}\n` : tpl };
+    return { action: 'migrated', text: rest ? `${block}\n\n${rest}\n` : tpl, blocks: 0 };
   }
-  return { action: 'customized', text: cur };
+  return { action: 'customized', text: cur, blocks: 0 };
 }
 
 // Apply planRefresh to a README on disk. Returns the action (or 'missing').
 function refreshReadme(readmePath, templatePath, folder, dry) {
   if (!fs.existsSync(readmePath)) return 'missing';
-  const { action, text } = planRefresh(
-    fs.readFileSync(readmePath, 'utf8'), fs.readFileSync(templatePath, 'utf8'), legacyText(folder));
+  const raw = fs.readFileSync(readmePath, 'utf8');
+  const { action, text, blocks } = planRefresh(
+    raw, fs.readFileSync(templatePath, 'utf8'), legacyText(folder));
   const rel = path.relative(process.cwd(), readmePath);
+  if (blocks > 1) console.error(`  warning: ${blocks} managed blocks in ${rel} — remove the extras by hand`);
   if (action === 'customized') {
     console.error(`  skip (customized README, no managed block): ${rel}`);
   } else if (action !== 'unchanged') {
     const verb = action === 'migrated' ? 'migrate' : 'update';
     if (dry) { console.error(`  would ${verb} README block: ${rel}`); return action; }
-    fs.writeFileSync(readmePath, text);
+    fs.writeFileSync(readmePath, /\r\n/.test(raw) ? text.replace(/\n/g, '\r\n') : text); // keep the file's EOL
     console.error(`  ${action} README block: ${rel}`);
   }
   return action;

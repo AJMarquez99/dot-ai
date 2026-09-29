@@ -179,5 +179,60 @@ check('sync --dry-run does not rewrite READMEs', () => {
   assert.strictEqual(fs.readFileSync(readme(d, 'knowledge'), 'utf8'), legacyReadme('knowledge'));
 });
 
+// #8: CRLF README with a stale block is refreshed and stays CRLF
+d = tmp();
+runSync(d);
+const crlfStale = fs.readFileSync(readme(d, 'guidelines'), 'utf8').replace('**Loading:**', 'STALE').replace(/\n/g, '\r\n');
+fs.writeFileSync(readme(d, 'guidelines'), crlfStale);
+runSync(d);
+check('sync refreshes a CRLF README and keeps CRLF', () => {
+  const t = fs.readFileSync(readme(d, 'guidelines'), 'utf8');
+  assert.ok(!t.includes('STALE') && t.includes('**Loading:**'));
+  assert.ok(!/(^|[^\r])\n/.test(t), 'no bare LF may remain');
+});
+// Review focus: a current CRLF README is left byte-for-byte alone
+d = tmp();
+runSync(d);
+const crlfCurrent = fs.readFileSync(readme(d, 'knowledge'), 'utf8').replace(/\n/g, '\r\n');
+fs.writeFileSync(readme(d, 'knowledge'), crlfCurrent);
+const resCrlf = spawnSync(process.execPath, [CLI, 'sync'], { cwd: d, encoding: 'utf8' });
+check('sync leaves a current CRLF README untouched', () => {
+  assert.strictEqual(fs.readFileSync(readme(d, 'knowledge'), 'utf8'), crlfCurrent);
+  assert.ok(!/README block: \.ai\/knowledge/.test(resCrlf.stderr), resCrlf.stderr);
+});
+// #9: duplicate blocks → all refreshed + warning
+d = tmp();
+runSync(d);
+const blk = fs.readFileSync(readme(d, 'notes'), 'utf8').match(/<!-- BEGIN \.ai-folder -->[\s\S]*?<!-- END \.ai-folder -->/)[0];
+fs.writeFileSync(readme(d, 'notes'), `${blk.replace('**Loading:**', 'STALE')}\n\nmine\n\n${blk}\n`);
+const resDup = spawnSync(process.execPath, [CLI, 'sync'], { cwd: d, encoding: 'utf8' });
+check('sync refreshes duplicate blocks and warns', () => {
+  const t = fs.readFileSync(readme(d, 'notes'), 'utf8');
+  assert.ok(!t.includes('STALE') && t.includes('mine'));
+  assert.ok(/warning: 2 managed blocks in .*notes\/README\.md/.test(resDup.stderr), resDup.stderr);
+});
+
+// #3 regression guard: block text with $-patterns is injected literally
+d = tmp();
+const wiring = require('../src/lib/wiring');
+const cfg = path.join(d, 'CLAUDE.md');
+fs.writeFileSync(cfg, '<!-- BEGIN .ai-convention -->\nOLD\n<!-- END .ai-convention -->\n');
+wiring.inject(cfg, '<!-- BEGIN .ai-convention -->\ncost $& and $1\n<!-- END .ai-convention -->', false);
+check('inject writes $-patterns literally', () => {
+  assert.ok(fs.readFileSync(cfg, 'utf8').includes('cost $& and $1'));
+});
+
+// #15: sync and bare init refuse to run inside a .ai/ layer
+d = tmp();
+fs.mkdirSync(path.join(d, '.ai'));
+for (const args of [['sync'], ['init', '--no-md'], ['--no-md']]) {
+  const res = spawnSync(process.execPath, [CLI, ...args], { cwd: path.join(d, '.ai'), encoding: 'utf8' });
+  check(`'${args.join(' ')}' inside .ai/ is refused (exit 2, no nested .ai/)`, () => {
+    assert.strictEqual(res.status, 2, res.stderr);
+    assert.ok(res.stderr.includes('inside a .ai/ layer'), res.stderr);
+    assert.ok(!fs.existsSync(path.join(d, '.ai', '.ai')));
+  });
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nSYNC OK');
 process.exit(failures ? 1 : 0);

@@ -30,7 +30,7 @@ not. Known divergences, all of which still produce identical output:
 
 | Concern | `install.sh` | `bin/cli.js` | Shared contract |
 |---|---|---|---|
-| Block replace | `awk` matching `BEGIN`/`END`, body read via `getline` from a temp file | `String.replace` with a regex `BEGIN[\s\S]*?END` | Same replaced bytes, idempotent |
+| Block replace | `awk` line-based state machine (trims a trailing `\r` and surrounding spaces/tabs off each record, requires well-formed non-nested `BEGIN`/`END` pairs, replaces each pair's body via `getline` from a temp file), warns and leaves the file untouched on a malformed block | the same line-based state machine, hand-rolled in JS (`cur.split('\n')`, same trim, same pair-validity scan, same replace-and-rejoin with `\n`) — deliberately not a regex against raw text, so the two can't diverge on where a line boundary falls | Same replaced bytes, idempotent, same malformed-block warning |
 | JSON merge | `jq`, else `node`, else `python3`; skip if none | pure-JS `JSON.parse`/`setDeep`/`JSON.stringify` | Same key set, 2-space indent, trailing `\n` |
 | Home dir | `$HOME` | `process.env.HOME \|\| os.homedir()` | Same global target path |
 | Block source | `printf` wraps `cat agent-instructions.md` | template-literal wraps `readFileSync(...).trimEnd()` | Byte-identical block |

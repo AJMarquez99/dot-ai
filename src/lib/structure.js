@@ -21,8 +21,15 @@ const PROJECT_BOUND = ['context', 'plans', 'audits'];
 // date-stamped and pruned (its filenames are the index).
 const UNINDEXED = ['context', 'archive'];
 
+// Answers lines for folders that have no template README of their own, used when
+// `dot-ai index` seeds one (the generic folder-README template has placeholders).
+const FOLDER_ANSWERS = {
+  skills: '**Answers: what codified workflows exist.** Agent-agnostic skills, reimplemented per tool (e.g. `.claude/skills/`).',
+  agents: '**Answers: what agent definitions exist.** Agent-agnostic agent definitions, reimplemented per tool (e.g. `.claude/agents/`).',
+};
+
 function isCanonical(name) {
   return FOLDERS.includes(name) || OPTIONAL_FOLDERS.includes(name);
 }
 
-module.exports = { FOLDERS, OPTIONAL_FOLDERS, PROJECT_BOUND, UNINDEXED, isCanonical };
+module.exports = { FOLDERS, OPTIONAL_FOLDERS, PROJECT_BOUND, UNINDEXED, FOLDER_ANSWERS, isCanonical };
