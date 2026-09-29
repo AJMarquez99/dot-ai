@@ -154,5 +154,82 @@ check('doctor reports an empty nested .ai/.ai/ once, not also as a stale folder'
   assert.ok(!/stale folder \(sync-removable\): \.ai\//.test(r.stderr), r.stderr);
 });
 
+// --- 1.2.0: index checks
+d = tmp(); scaffold(d);
+check('fresh scaffold: no index warnings at all', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+  assert.ok(!/TODO: describe|unlisted in index|index entry/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'new.md'), 'x\n');
+check('unlisted file is a warning, exit 0, with the index hint', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, `unlisted must not fail:\n${r.stderr}`);
+  assert.ok(/· unlisted in index: knowledge\/new\.md/.test(r.stderr), r.stderr);
+  assert.ok(/Run 'dot-ai index' to add missing rows/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'new.md'), 'x\n');
+execFileSync(process.execPath, [CLI, 'index'], { cwd: d, stdio: 'ignore' });
+check('TODO: describe rows are a counted warning, exit 0', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+  assert.ok(/· 1 TODO: describe row\(s\) in knowledge\/README\.md/.test(r.stderr), r.stderr);
+});
+
+const addRow = (dd, folder, row) => fs.appendFileSync(path.join(dd, '.ai', folder, 'README.md'), `${row}\n`);
+d = tmp(); scaffold(d);
+addRow(d, 'knowledge', '| [gone.md](gone.md) | x |');
+check('stale entry fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ stale index entry: gone\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', '_s.md'), 'x\n');
+addRow(d, 'knowledge', '| [_s.md](_s.md) | x |');
+check('_ entry in README.md fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ private entry in public index: _s\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+addRow(d, 'knowledge', '| `gone.md` (local) | x |');
+check('(local) row for an absent file is not stale', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', '.gitignore'), 'loc.md\n');
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'loc.md'), 'x\n');
+addRow(d, 'knowledge', '| [loc.md](loc.md) | x |');
+check('linked row to a gitignored file fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ linked entry is gitignored: loc\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+{
+  const f = path.join(d, '.ai', 'knowledge', 'README.md');
+  const t = fs.readFileSync(f, 'utf8');
+  const blk = t.slice(t.indexOf('<!-- BEGIN .ai-folder -->'), t.indexOf('<!-- END .ai-folder -->') + '<!-- END .ai-folder -->'.length);
+  fs.writeFileSync(f, `${t}\n${blk}\n`);
+}
+check('duplicate managed blocks fail', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ 2 managed blocks in knowledge\/README\.md — remove the extras by hand/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'z.md'), 'x\n');
+check('doctor with a broken GIT_DIR still runs index checks without crashing', () => {
+  const r = doctorErr(d, { GIT_DIR: path.join(d, 'nonexistent', '.git') });
+  assert.ok(/unlisted in index: knowledge\/z\.md/.test(r.stderr), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

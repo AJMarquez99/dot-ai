@@ -3,9 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { findRoot } = require('../lib/root');
-const { FOLDERS, isCanonical } = require('../lib/structure');
+const { FOLDERS, OPTIONAL_FOLDERS, UNINDEXED, isCanonical } = require('../lib/structure');
 const { cascadeChain } = require('../lib/cascade');
-const { git } = require('../lib/git-ignore');
+const idx = require('../lib/index-section');
+const markers = require('../lib/markers');
+const { FOLDER_BEGIN, FOLDER_END } = require('../lib/folder-readme');
+const { git, publicIgnored } = require('../lib/git-ignore');
 
 // Collect problems with the nearest .ai/ tree (read-only). Returns string[].
 function diagnose(aiDir) {
@@ -50,6 +53,38 @@ function diagnose(aiDir) {
   return problems;
 }
 
+// Index health for every indexed folder of the layer (README.md only; _README.md
+// is private and not audited). Problems break the committed-index promise;
+// warnings are unfinished work.
+function diagnoseIndexes(aiDir) {
+  const problems = [], warnings = [];
+  let unlisted = 0;
+  const names = [...FOLDERS, ...OPTIONAL_FOLDERS].filter((f) => !UNINDEXED.includes(f));
+  for (const f of names) {
+    const dir = path.join(aiDir, f);
+    const readme = path.join(dir, 'README.md');
+    if (!fs.existsSync(readme) || !fs.statSync(dir).isDirectory()) continue;
+    const rel = `${f}/README.md`;
+    const text = fs.readFileSync(readme, 'utf8').replace(/\r\n/g, '\n');
+    const scan = markers.scanBlocks(text, FOLDER_BEGIN, FOLDER_END);
+    if (scan.status === 'ok' && scan.blocks > 1) {
+      problems.push(`${scan.blocks} managed blocks in ${rel} — remove the extras by hand`);
+    }
+    const { pub } = idx.listEntries(dir);
+    const a = idx.auditIndex({
+      text, entries: pub, ignored: publicIgnored(dir, pub).ignored, isPublic: true,
+      exists: (top) => fs.existsSync(path.join(dir, top)),
+    });
+    for (const r of a.privateEntries) problems.push(`private entry in public index: ${r} (${rel})`);
+    for (const r of a.stale) problems.push(`stale index entry: ${r} (${rel})`);
+    for (const r of a.linkedIgnored) problems.push(`linked entry is gitignored: ${r} (${rel})`);
+    if (a.todo) warnings.push(`${a.todo} TODO: describe row(s) in ${rel}`);
+    for (const m of a.missing) warnings.push(`unlisted in index: ${f}/${m}`);
+    unlisted += a.missing.length;
+  }
+  return { problems, warnings, unlisted };
+}
+
 // opts: { cwd }
 function run(opts) {
   const { cwd } = opts;
@@ -59,6 +94,8 @@ function run(opts) {
   const problems = diagnose(aiDir);
   const ignore = diagnoseIgnore(aiDir);
   problems.push(...ignore.problems);
+  const indexes = diagnoseIndexes(aiDir);
+  problems.push(...indexes.problems);
   console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   const chain = cascadeChain(cwd);
   if (chain.length > 1) {
@@ -66,8 +103,10 @@ function run(opts) {
     [...chain].reverse().forEach((ai) => console.error(`    - ${ai}`));
   }
   for (const n of ignore.notes) console.error(`  · ${n}`);
+  for (const w of indexes.warnings) console.error(`  · ${w}`);
   if (problems.length === 0) {
     console.error('  ✓ no problems found');
+    if (indexes.unlisted) console.error("  Run 'dot-ai index' to add missing rows.");
     process.exit(0);
   }
   for (const p of problems) console.error(`  ✗ ${p}`);
@@ -75,6 +114,7 @@ function run(opts) {
     ? "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule; ignore problems above need a git fix (e.g. 'git rm --cached <path>')."
     : "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule.";
   console.error(`\n${problems.length} problem(s) found. ${hint}`);
+  if (indexes.unlisted) console.error("  Run 'dot-ai index' to add missing rows.");
   process.exit(1);
 }
 
@@ -144,4 +184,4 @@ function diagnoseIgnore(aiDir) {
   return { problems, notes };
 }
 
-module.exports = { run, diagnose, diagnoseIgnore };
+module.exports = { run, diagnose, diagnoseIgnore, diagnoseIndexes };
