@@ -75,5 +75,47 @@ check('every duplicate managed block is refreshed and counted', () => {
   assert.strictEqual(r.text.split(B).length - 1, 2, 'duplicates are refreshed, never deleted');
 });
 
+check('malformed (unterminated) block -> malformed, untouched', () => {
+  const cur = `${B}\nOLD\n\n## Index\n`;
+  const r = fr.planRefresh(cur, TPL, LEGACY);
+  assert.strictEqual(r.action, 'malformed');
+  assert.strictEqual(r.text, cur);
+});
+check('nested BEGIN -> malformed', () => {
+  assert.strictEqual(fr.planRefresh(`${B}\n${B}\nx\n${E}\n`, TPL, LEGACY).action, 'malformed');
+});
+check('inline markers in prose are not a block', () => {
+  const cur = `# knowledge/\n\nsee ${B} x ${E} inline\n`;
+  assert.strictEqual(fr.planRefresh(cur, TPL, LEGACY).action, 'customized');
+});
+check('current block without a trailing newline is unchanged, not updated', () => {
+  const cur = `${fr.extractBlock(TPL)}\n\nmine`;
+  const r = fr.planRefresh(cur, TPL, LEGACY);
+  assert.strictEqual(r.action, 'unchanged');
+  assert.strictEqual(r.text, cur);
+});
+check('stale block without trailing newline keeps no trailing newline', () => {
+  const r = fr.planRefresh(`${B}\nOLD\n${E}\n\nmine`, TPL, LEGACY);
+  assert.strictEqual(r.action, 'updated');
+  assert.ok(r.text.endsWith('\nmine'), JSON.stringify(r.text.slice(-10)));
+});
+check('BOM before the block is tolerated and preserved', () => {
+  const r = fr.planRefresh(`﻿${B}\nOLD\n${E}\n`, TPL, LEGACY);
+  assert.strictEqual(r.action, 'updated');
+  assert.ok(r.text.startsWith(`﻿${B}`));
+});
+check('refreshReadme warns and does not write a malformed README', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-fr-'));
+  const f = path.join(dir, 'README.md'), t = path.join(dir, 'tpl.md');
+  fs.writeFileSync(f, `${B}\nOLD\n`); fs.writeFileSync(t, TPL);
+  const orig = console.error; const lines = [];
+  console.error = (s) => lines.push(s);
+  try { assert.strictEqual(fr.refreshReadme(f, t, 'knowledge', false), 'malformed'); }
+  finally { console.error = orig; }
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), `${B}\nOLD\n`);
+  assert.ok(lines.some((l) => /malformed \.ai-folder block — not modified/.test(l)), lines.join('\n'));
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nFOLDER-README OK');
 process.exit(failures ? 1 : 0);

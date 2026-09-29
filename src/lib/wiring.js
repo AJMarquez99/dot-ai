@@ -8,8 +8,6 @@ const BEGIN = '<!-- BEGIN .ai-convention -->';
 const END = '<!-- END .ai-convention -->';
 const PLANS_DIR = '.ai/plans';
 
-function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
 // Prefer $HOME so tests can redirect it; fall back to os.homedir() (Windows).
 function homeDir() { return process.env.HOME || os.homedir(); }
 
@@ -93,6 +91,6 @@ function writePlansSetting(want, dry) {
 }
 
 module.exports = {
-  BEGIN, END, PLANS_DIR, escapeRe, homeDir, inject,
+  BEGIN, END, PLANS_DIR, homeDir, inject,
   globalConfigFile, conventionInstalled, setDeep, mergeJsonSetting, writePlansSetting,
 };
