@@ -113,7 +113,8 @@ index is yours.
 - **Never list `_` files in `README.md`** — it is committed. Index them in the folder's gitignored
   `_README.md` only if one exists or the user asks for one. When reading an index, also read
   `_README.md` if present. Other gitignored files are listed name-only as `` `name` (local) `` with no
-  link, since other clones won't have them.
+  link, since other clones won't have them. The name itself is still committed — use the `_` prefix
+  for anything whose name is sensitive.
 - `dot-ai index` adds rows for unlisted files (`TODO: describe`); you write the "Answers" text.
 
 ## Nested cascade

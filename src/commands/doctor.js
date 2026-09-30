@@ -39,7 +39,9 @@ function diagnose(aiDir) {
   // 5. Stale non-canonical folders (sync-removable candidates).
   for (const name of fs.readdirSync(aiDir)) {
     const full = path.join(aiDir, name);
-    if (!fs.statSync(full).isDirectory()) continue;
+    let isDir = false;
+    try { isDir = fs.statSync(full).isDirectory(); } catch { /* dangling symlink */ }
+    if (!isDir) continue;
     if (name.startsWith('_') || isCanonical(name) || name === '.ai') continue;
     const entries = fs.readdirSync(full);
     if (entries.every((e) => e === 'README.md' || e === '.gitignore')) {
@@ -65,8 +67,10 @@ function plansOnly(aiDir) {
   try { entries = fs.readdirSync(aiDir).filter((e) => e !== '.DS_Store'); } catch { return null; }
   if (entries.length !== 1 || entries[0] !== 'plans') return null;
   const plans = path.join(aiDir, 'plans');
-  if (!fs.statSync(plans).isDirectory()) return null;
-  return { files: fs.readdirSync(plans).filter((e) => e !== '.DS_Store').length };
+  try {
+    if (!fs.statSync(plans).isDirectory()) return null;
+    return { files: fs.readdirSync(plans).filter((e) => e !== '.DS_Store').length };
+  } catch { return null; }
 }
 
 function plansOnlyProblem(aiDir, info) {

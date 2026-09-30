@@ -305,5 +305,15 @@ check('malformed .ai-folder block is reported', () => {
   assert.ok(r.stderr.includes('knowledge/README.md has an incomplete or malformed .ai-folder block — fix it by hand'), r.stderr);
 });
 
+d = tmp();
+fs.mkdirSync(path.join(d, '.ai'));
+fs.symlinkSync(path.join(d, 'nowhere'), path.join(d, '.ai', 'plans'));
+check('dangling plans symlink does not crash doctor', () => {
+  const r = doctorErr(d);
+  assert.ok(!/TypeError|ENOENT/.test(r.stderr), r.stderr);
+  assert.ok(!/at .*doctor\.js/.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes('plans-only'), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

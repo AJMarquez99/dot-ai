@@ -86,7 +86,7 @@ Each folder's `README.md` has two parts: a managed block (`<!-- BEGIN .ai-folder
 `dot-ai sync` keeps current, and an `## Index` table below it that belongs to you — one row per
 file, saying what it answers. Agents read indexes first and open files on demand, and keep indexes
 current as they work. `dot-ai index` fills in rows for anything unlisted. `_` files stay out of the
-committed index; `dot-ai index --private` lists them in a gitignored `_README.md` instead. Files git ignores (other than `_` files) are listed name-only — `` `name` (local) `` — so the committed index never links to a file other clones don't have.
+committed index; `dot-ai index --private` lists them in a gitignored `_README.md` instead. Files git ignores (other than `_` files) are listed name-only — `` `name` (local) `` — so the committed index never links to a file other clones don't have. The name itself is still committed — use the `_` prefix for anything whose name is sensitive.
 
 ## How it wires into your agent
 
