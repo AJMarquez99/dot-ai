@@ -154,5 +154,166 @@ check('doctor reports an empty nested .ai/.ai/ once, not also as a stale folder'
   assert.ok(!/stale folder \(sync-removable\): \.ai\//.test(r.stderr), r.stderr);
 });
 
+// --- 1.2.0: index checks
+d = tmp(); scaffold(d);
+check('fresh scaffold: no index warnings at all', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+  assert.ok(!/TODO: describe|unlisted in index|index entry/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'new.md'), 'x\n');
+check('unlisted file is a warning, exit 0, with the index hint', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, `unlisted must not fail:\n${r.stderr}`);
+  assert.ok(/· unlisted in index: knowledge\/new\.md/.test(r.stderr), r.stderr);
+  assert.ok(/Run 'dot-ai index' to add missing rows/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'new.md'), 'x\n');
+execFileSync(process.execPath, [CLI, 'index'], { cwd: d, stdio: 'ignore' });
+check('TODO: describe rows are a counted warning, exit 0', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+  assert.ok(/· 1 TODO: describe row\(s\) in knowledge\/README\.md/.test(r.stderr), r.stderr);
+});
+
+const addRow = (dd, folder, row) => fs.appendFileSync(path.join(dd, '.ai', folder, 'README.md'), `${row}\n`);
+d = tmp(); scaffold(d);
+addRow(d, 'knowledge', '| [gone.md](gone.md) | x |');
+check('stale entry fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ stale index entry: gone\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', '_s.md'), 'x\n');
+addRow(d, 'knowledge', '| [_s.md](_s.md) | x |');
+check('_ entry in README.md fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ private entry in public index: _s\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+addRow(d, 'knowledge', '| `gone.md` (local) | x |');
+check('(local) row for an absent file is not stale', () => {
+  const r = doctorErr(d);
+  assert.ok(r.ok, r.stderr);
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', '.gitignore'), 'loc.md\n');
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'loc.md'), 'x\n');
+addRow(d, 'knowledge', '| [loc.md](loc.md) | x |');
+check('linked row to a gitignored file fails', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ linked entry is gitignored: loc\.md \(knowledge\/README\.md\)/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+{
+  const f = path.join(d, '.ai', 'knowledge', 'README.md');
+  const t = fs.readFileSync(f, 'utf8');
+  const blk = t.slice(t.indexOf('<!-- BEGIN .ai-folder -->'), t.indexOf('<!-- END .ai-folder -->') + '<!-- END .ai-folder -->'.length);
+  fs.writeFileSync(f, `${t}\n${blk}\n`);
+}
+check('duplicate managed blocks fail', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok); assert.ok(/✗ 2 managed blocks in knowledge\/README\.md — remove the extras by hand/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); gitInit(d); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', 'knowledge', 'z.md'), 'x\n');
+check('doctor with a broken GIT_DIR still runs index checks without crashing', () => {
+  const r = doctorErr(d, { GIT_DIR: path.join(d, 'nonexistent', '.git') });
+  assert.ok(/unlisted in index: knowledge\/z\.md/.test(r.stderr), r.stderr);
+});
+
+// --- 1.2.0: plans-only layers, .ai/.ai file
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+check('nearest plans-only layer: only that problem is reported', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(/✗ plans-only \.ai\/ layer: .*\.ai — likely created by a relative plansDirectory/.test(r.stderr), r.stderr);
+  assert.ok(!/missing folder/.test(r.stderr), `structural noise should be suppressed:\n${r.stderr}`);
+  assert.ok(!/has \d+ file/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.writeFileSync(path.join(d, '.ai', 'plans', 'p.md'), 'x\n');
+fs.writeFileSync(path.join(d, '.ai', '.DS_Store'), '');
+check('plans-only with files says to keep them; .DS_Store ignored', () => {
+  const r = doctorErr(d);
+  assert.ok(/plans\/ has 1 file\(s\) — keep them before removing/.test(r.stderr), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+check('ancestor plans-only layer is flagged from a real project', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(!r.ok);
+  assert.ok(r.stderr.includes(`plans-only .ai/ layer: ${path.join(d, '.ai')}`), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+check('a scaffolded layer is not plans-only', () => {
+  assert.ok(!/plans-only/.test(doctorErr(d).stderr));
+});
+
+d = tmp(); scaffold(d);
+fs.writeFileSync(path.join(d, '.ai', '.ai'), 'oops\n');
+check('a FILE named .ai/.ai gets its own wording', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(/stray file \.ai\/\.ai inside the layer — remove it/.test(r.stderr), r.stderr);
+  assert.ok(!/nested \.ai\/\.ai\/ found/.test(r.stderr), r.stderr);
+});
+
+// --- final fix wave: footer for plans-only problems, malformed folder block
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+check('nearest stray only: no sync hint', () => {
+  const r = doctorErr(d);
+  assert.ok(/1 problem\(s\) found\./.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+check('ancestor stray only: no sync hint', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(/plans-only/.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+});
+
+d = tmp(); fs.mkdirSync(path.join(d, '.ai', 'plans'), { recursive: true });
+fs.mkdirSync(path.join(d, 'proj')); scaffold(path.join(d, 'proj'));
+fs.rmSync(path.join(d, 'proj', '.ai', 'lessons'), { recursive: true });
+check('ancestor stray + nearest problem: sync hint, nearest check and stray line all shown', () => {
+  const r = doctorErr(path.join(d, 'proj'));
+  assert.ok(r.stderr.includes("Run 'dot-ai sync'"), r.stderr);
+  assert.ok(r.stderr.includes('missing folder: lessons/'), r.stderr);
+  assert.ok(r.stderr.includes('plans-only .ai/ layer'), r.stderr);
+});
+
+d = tmp(); scaffold(d);
+fs.appendFileSync(path.join(d, '.ai', 'knowledge', 'README.md'), '\n<!-- BEGIN .ai-folder -->\n');
+check('malformed .ai-folder block is reported', () => {
+  const r = doctorErr(d);
+  assert.ok(!r.ok);
+  assert.ok(r.stderr.includes('knowledge/README.md has an incomplete or malformed .ai-folder block — fix it by hand'), r.stderr);
+});
+
+d = tmp();
+fs.mkdirSync(path.join(d, '.ai'));
+fs.symlinkSync(path.join(d, 'nowhere'), path.join(d, '.ai', 'plans'));
+check('dangling plans symlink does not crash doctor', () => {
+  const r = doctorErr(d);
+  assert.ok(!/TypeError|ENOENT/.test(r.stderr), r.stderr);
+  assert.ok(!/at .*doctor\.js/.test(r.stderr), r.stderr);
+  assert.ok(!r.stderr.includes('plans-only'), r.stderr);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nDOCTOR OK');
 process.exit(failures ? 1 : 0);

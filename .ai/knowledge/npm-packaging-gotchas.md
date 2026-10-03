@@ -48,19 +48,17 @@ publishes privately) unless you say otherwise. `package.json` declares
 `--access public` on the command line. Don't remove it, and remember it if you fork under a different
 scope.
 
-## 3. The Node-14 floor is a hand-maintained contract, not a tested one
+## 3. CI must include the floor version
 
-`package.json` declares `engines: { node: ">=14" }`, but CI only runs Node **18 and 20** (see
-[`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml)). Nothing in the pipeline actually
-executes the code on Node 14. So the floor holds only as long as humans keep it: `bin/cli.js` uses
-**only APIs available at Node 14**, and that's verified by review, not by tests.
+`package.json` declares `engines: { node: ">=18" }`, and CI runs Node **18 and 20** (see
+[`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml)), so the floor is actually
+executed: the Node 18 job fails if code uses an API newer than the floor. (It used to be `>=14` with
+CI on 18/20 only, so nothing ran the declared minimum and it held by review alone — a newer API would
+pass CI and silently break the floor.)
 
-Practical consequence: when you add code to `cli.js`, do a quick **API-version audit** of anything
-that smells recent — newer `fs` options, `structuredClone`, `Array.prototype.at`, `Object.hasOwn`,
-top-level features, etc. A test passing on Node 20 tells you nothing about Node 14. Either keep the
-floor honestly or raise `engines` deliberately (and update this note); don't let it drift by
-accident. The existing code is conservative on purpose — it sticks to long-stable `fs`/`path`/`os`/
-`readline` built-ins.
+The general lesson: whatever `engines` declares, CI's matrix must include that exact version. If you
+raise or lower the floor, change `engines`, the CI matrix, and this note together; don't let them
+drift apart. Still check an API's "Added in" version before using anything recent.
 
 ## 4. LF line endings are locked on the executables
 

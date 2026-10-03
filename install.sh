@@ -175,12 +175,14 @@ codex_target() {
   if [ "$GLOBAL" -eq 1 ]; then printf '%s/AGENTS.md' "${CODEX_HOME:-$HOME/.codex}"; else printf 'AGENTS.md'; fi
 }
 
-# Structure check: the file's marker lines (after CR-strip + ws-trim) must form
-# well-formed, non-nested BEGIN/END pairs — no END before its BEGIN, no BEGIN
-# nested inside an open block, and at least one complete pair. Must match
-# wiring.js's inject() scan exactly (same trim, same state machine) — see #5
-# parity fix (structural validation replaces line-count/marker-presence checks).
-block_ok() { LC_ALL=C awk -v b="$BEGIN" -v e="$END" '{l=$0; sub(/\r$/,"",l); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{exit (bad||inb||n==0)}' "$1"; }
+# Structure check: the file's marker lines (after CR-strip, a BOM strip on
+# record 1 only, and ws-trim) must form well-formed, non-nested BEGIN/END pairs
+# — no END before its BEGIN, no BEGIN nested inside an open block, and at least
+# one complete pair. Must match markers.js's scan exactly (same normalization
+# order, same state machine). On success prints the pair count so inject() can
+# warn about duplicate blocks.
+BOM=$(printf '\357\273\277')
+block_ok() { LC_ALL=C awk -v b="$BEGIN" -v e="$END" -v bom="$BOM" '{l=$0; sub(/\r$/,"",l); if (NR==1 && index(l,bom)==1) l=substr(l,4); gsub(/^[ \t]+|[ \t]+$/,"",l)} l==b {if(inb){bad=1; exit} inb=1; next} l==e {if(!inb){bad=1; exit} inb=0; n++} END{if (bad||inb||n==0) exit 1; print n}' "$1"; }
 
 # 2) Inject the block into a single file (append, or replace existing block).
 # The block is read from a file via awk getline — BSD/macOS awk rejects multi-line
@@ -190,15 +192,18 @@ inject() {
   bf=$(mktemp)
   printf '%s\n%s\n%s\n' "$BEGIN" "$(cat "$SRC/agent-instructions.md")" "$END" > "$bf"
   if [ -f "$target" ] && grep -qF "$BEGIN" "$target"; then
-    if ! block_ok "$target"; then
+    if ! nblocks=$(block_ok "$target"); then
       rm -f "$bf"
       log "  warning: $target has an incomplete or malformed convention block — not modified"
       return 0
     fi
+    if [ "$nblocks" -gt 1 ]; then
+      log "  warning: $nblocks convention blocks in $target — remove the extras by hand"
+    fi
     tmp=$(mktemp)
-    LC_ALL=C awk -v b="$BEGIN" -v e="$END" -v bf="$bf" '
-      { l=$0; sub(/\r$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l) }
-      l==b {while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
+    LC_ALL=C awk -v b="$BEGIN" -v e="$END" -v bf="$bf" -v bom="$BOM" '
+      { l=$0; sub(/\r$/, "", l); hb=0; if (NR==1 && index(l,bom)==1) { l=substr(l,4); hb=1 }; gsub(/^[ \t]+|[ \t]+$/, "", l) }
+      l==b {if (hb) printf "%s", bom; while ((getline line < bf) > 0) print line; close(bf); skip=1; next}
       l==e {skip=0; next}
       skip!=1 {print}
     ' "$target" > "$tmp"

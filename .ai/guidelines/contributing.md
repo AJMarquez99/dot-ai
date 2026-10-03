@@ -29,14 +29,8 @@ we support.
 - **Zero runtime dependencies.** `package.json` has no `dependencies`. Only Node built-ins
   (`fs`, `path`, `os`, `readline`, `child_process` in tests). Adding a dependency is a design change,
   not a convenience.
-- **Use only APIs present in Node 14.** `engines` declares `node >=14`, but CI runs Node 18 and 20 —
-  so a newer API will pass CI and still break the declared floor. This is a real trap. Avoid, among
-  others:
-  - `fs.cpSync` (16.7) — we recurse manually in `copyTree`.
-  - `structuredClone` (17).
-  - `String.prototype.replaceAll` (15) — use `.replace(/…/g, …)`.
-  - `Array.prototype.at` (16.6), `Object.hasOwn` (16.9), `fs.rmSync`'s newer options, top-level await.
-  - If unsure, check the API's "Added in" version before using it.
+- **Use only APIs present in Node 18.** `engines` declares `node >=18` and CI's Node 18 job
+  exercises that floor. If unsure, check the API's "Added in" version before using it.
 - **Pure-JS JSON handling.** Parse/merge/stringify in-process (`JSON.parse` → `setDeep` →
   `JSON.stringify(data, null, 2) + '\n'`). Never shell out to `jq`/`python3` from `cli.js`.
 - **Prefer `process.env.HOME` with an `os.homedir()` fallback** (`homeDir()`), so tests can redirect

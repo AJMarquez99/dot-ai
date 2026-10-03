@@ -114,9 +114,8 @@ explicitly (`global_case` checks the plans setting lands in the work dir, never 
 
 Three deliberate choices keep both installers honest across platforms:
 
-- **Node 14 floor.** `package.json` declares `engines: { node: ">=14" }`, and `cli.js` uses only
-  APIs available at that version. CI exercises Node 18 and 20, so the 14 floor is a contract that
-  must be upheld by code review, not by tests — see [`npm-packaging-gotchas.md`](./npm-packaging-gotchas.md).
+- **Node 18 floor.** `package.json` declares `engines: { node: ">=18" }`, and CI runs Node 18 and
+  20, so the floor is exercised by the Node 18 job rather than upheld by review — see [`npm-packaging-gotchas.md`](./npm-packaging-gotchas.md).
 - **LF line endings on the executables.** [`../../.gitattributes`](../../.gitattributes) pins
   `bin/cli.js` and `*.sh` to LF regardless of a contributor's `core.autocrlf`, because a published
   binary with a CRLF shebang silently breaks on Unix.

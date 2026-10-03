@@ -2,23 +2,20 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { escapeRe } = require('./wiring');
+const markers = require('./markers');
 
 // Folder READMEs = a convention-managed block (refreshed by `sync`) + user-owned
 // remainder (the ## Index and any project prose). Same idea as the .ai-convention
 // block in CLAUDE.md, with its own markers.
 const FOLDER_BEGIN = '<!-- BEGIN .ai-folder -->';
 const FOLDER_END = '<!-- END .ai-folder -->';
-const BLOCK_RE = new RegExp(`${escapeRe(FOLDER_BEGIN)}[\\s\\S]*?${escapeRe(FOLDER_END)}`);
-const BLOCK_RE_ALL = new RegExp(BLOCK_RE.source, 'g');
 const LEGACY_DIR = path.join(__dirname, 'legacy-readmes');
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
 
 // The managed block (markers included) in `text`, or null.
 function extractBlock(text) {
-  const m = lf(text).match(BLOCK_RE);
-  return m ? m[0] : null;
+  return markers.extractBlock(lf(text), FOLDER_BEGIN, FOLDER_END);
 }
 
 // The v1.0.0 README shipped for `folder` (the only migration source), or null.
@@ -29,16 +26,18 @@ function legacyText(folder) {
 
 // Pure: decide how a README should change. Never guesses — a block-less README is
 // migrated only when it starts with the exact legacy text; anything else is left alone.
+// Marker handling is the shared line-based state machine (markers.js).
 function planRefresh(current, template, legacy) {
   const cur = lf(current);
   const tpl = lf(template);
   const block = extractBlock(tpl);
   if (!block) throw new Error('template README has no .ai-folder block');
-  const blocks = (cur.match(BLOCK_RE_ALL) || []).length;
-  if (blocks > 0) {
-    // Every block is refreshed (duplicates stay; the caller warns). Fn: no $-expansion.
-    const next = cur.replace(BLOCK_RE_ALL, () => block);
-    return { action: next === cur ? 'unchanged' : 'updated', text: next, blocks };
+  const r = markers.replaceBlocks(cur, FOLDER_BEGIN, FOLDER_END, block);
+  if (r.status === 'malformed') return { action: 'malformed', text: cur, blocks: r.blocks };
+  if (r.status === 'ok') {
+    // replaceBlocks ends every record with \n; keep a README's missing final newline.
+    const next = cur.endsWith('\n') ? r.text : r.text.slice(0, -1);
+    return { action: next === cur ? 'unchanged' : 'updated', text: next, blocks: r.blocks };
   }
   if (legacy && cur.startsWith(legacy)) {
     const rest = cur.slice(legacy.length).trim();
@@ -55,6 +54,10 @@ function refreshReadme(readmePath, templatePath, folder, dry) {
     raw, fs.readFileSync(templatePath, 'utf8'), legacyText(folder));
   const rel = path.relative(process.cwd(), readmePath);
   if (blocks > 1) console.error(`  warning: ${blocks} managed blocks in ${rel} — remove the extras by hand`);
+  if (action === 'malformed') {
+    console.error(`  warning: ${rel} has an incomplete or malformed .ai-folder block — not modified`);
+    return action;
+  }
   if (action === 'customized') {
     console.error(`  skip (customized README, no managed block): ${rel}`);
   } else if (action !== 'unchanged') {

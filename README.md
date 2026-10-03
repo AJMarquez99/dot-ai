@@ -37,12 +37,12 @@ npx @ajmarquez99/dot-ai
 | `init` | Scaffold `.ai/` and optionally wire agent config (the default action) |
 | `wire` | Inject/update the convention block in `CLAUDE.md`/`GEMINI.md`/`AGENTS.md` |
 | `sync` | Re-apply the latest scaffold, refresh folder README blocks, prune stale-empty folders, resync convention blocks |
-| `doctor` | Read-only structure/health diagnosis (and the ancestor cascade); asks git whether `_` files are really ignored and flags any already tracked |
+| `doctor` | Read-only structure/health diagnosis (and the ancestor cascade); asks git whether `_` files are really ignored and flags any already tracked; index health (stale/private/gitignored links, TODO rows) and stray plans-only layers |
 | `archive <file>` | Move a file into `archive/` with a `YYYY-MM-DD_` prefix (`--retain` to exempt from prune) |
 | `prune` | Delete `archive/` entries past the retention window (dry-run by default; `--force` to delete) |
 | `context` | Print the effective `.ai/` cascade for the current directory (alias: `resolve`) |
 | `promote <file> <up\|down\|global\|path>` | Copy (or `--move`) a file to another cascade layer |
-| `index [folder]` | Add missing rows to folders' `## Index` tables (`--private` for `_` files; never edits existing rows) |
+| `index [folder]` | Add missing rows to folders' `## Index` tables (`--private` for `_` files; gitignored files get name-only `(local)` rows; never edits existing rows) |
 
 ### Nested cascade & global `~/.ai/`
 
@@ -86,7 +86,7 @@ Each folder's `README.md` has two parts: a managed block (`<!-- BEGIN .ai-folder
 `dot-ai sync` keeps current, and an `## Index` table below it that belongs to you — one row per
 file, saying what it answers. Agents read indexes first and open files on demand, and keep indexes
 current as they work. `dot-ai index` fills in rows for anything unlisted. `_` files stay out of the
-committed index; `dot-ai index --private` lists them in a gitignored `_README.md` instead.
+committed index; `dot-ai index --private` lists them in a gitignored `_README.md` instead. Files git ignores (other than `_` files) are listed name-only — `` `name` (local) `` — so the committed index never links to a file other clones don't have. The name itself is still committed — use the `_` prefix for anything whose name is sensitive.
 
 ## How it wires into your agent
 
