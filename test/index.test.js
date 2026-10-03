@@ -317,7 +317,7 @@ d = tmp(); scaffold(d);
 {
   const realTemplateAiDir = path.join(__dirname, '..', 'template', '.ai');
   const crlfTemplateAiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotai-tpl-crlf-'));
-  // Recursive copy without fs.cpSync (Node >=16.7) — the package floor is Node 14.
+  // Recursive copy without fs.cpSync (Node >=16.7) — kept manual; the package floor is Node 18.
   const copyDir = (s, t) => {
     fs.mkdirSync(t, { recursive: true });
     for (const e of fs.readdirSync(s, { withFileTypes: true })) {
@@ -336,6 +336,108 @@ d = tmp(); scaffold(d);
     assert.ok(!t.includes('<the one question'), t);
   });
 }
+
+// --- 1.2.0: (local) rows and auditIndex (pure)
+check('addEntries writes a name-only (local) table row for local names', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n', ['a.md', 'l.md', 'd/'],
+    { hasReadme: () => false, isLocal: (n) => n !== 'a.md' });
+  assert.ok(t.includes('| [a.md](a.md) | TODO: describe |'), t);
+  assert.ok(t.includes('| `l.md` (local) | TODO: describe |'), t);
+  assert.ok(t.includes('| `d/` (local) | TODO: describe |'), t);
+});
+check('addEntries writes a name-only (local) bullet', () => {
+  const t = idx.addEntries('# k/\n\n## Index\n\n- [a.md](a.md) — x\n', ['l.md'], { isLocal: () => true });
+  assert.ok(t.includes('- `l.md` (local) — TODO: describe'), t);
+});
+check('parseSection marks (local), linked and todo entries', () => {
+  const { entries } = idx.parseSection('\n| File | Answers |\n|---|---|\n| [a.md](a.md) | x |\n| `l.md` (local) | TODO: describe |\n| `b.md` | y |\n');
+  assert.deepStrictEqual(entries, [
+    { ref: 'a.md', local: false, linked: true, todo: false },
+    { ref: 'l.md', local: true, linked: false, todo: true },
+    { ref: 'b.md', local: false, linked: false, todo: false },
+  ]);
+});
+check('parseSection marks (local) bullets', () => {
+  const { entries } = idx.parseSection('\n- `l.md` (local) — note\n- [a.md](a.md) — x\n');
+  assert.deepStrictEqual(entries.map((e) => e.local), [true, false]);
+});
+check('auditIndex classifies every finding', () => {
+  const text = '# k/\n\n## Index\n\n| File | Answers |\n|---|---|\n'
+    + '| [a.md](a.md) | ok |\n| [gone.md](gone.md) | x |\n| `l.md` (local) | TODO: describe |\n'
+    + '| [ign.md](ign.md) | x |\n| [_s.md](_s.md) | x |\n| [https://x.io](https://x.io) | x |\n';
+  const onDisk = new Set(['a.md', 'ign.md', '_s.md', 'new.md', 'd']);
+  const a = idx.auditIndex({
+    text, entries: ['a.md', 'ign.md', 'new.md', 'd/'], exists: (t) => onDisk.has(t),
+    ignored: new Set(['ign.md']), isPublic: true,
+  });
+  assert.deepStrictEqual(a.privateEntries, ['_s.md']);
+  assert.deepStrictEqual(a.stale, ['gone.md']);            // l.md is (local): never stale
+  assert.deepStrictEqual(a.linkedIgnored, ['ign.md']);
+  assert.deepStrictEqual(a.missing, ['new.md', 'd/']);
+  assert.strictEqual(a.todo, 1);
+});
+check('auditIndex: private index never reports linkedIgnored or privateEntries', () => {
+  const a = idx.auditIndex({ text: '## Index\n\n| File | Answers |\n|---|---|\n| [_s.md](_s.md) | x |\n',
+    entries: ['_s.md'], exists: () => true, ignored: new Set(['_s.md']), isPublic: false });
+  assert.deepStrictEqual([a.privateEntries, a.linkedIgnored, a.missing], [[], [], []]);
+});
+check('auditIndex: ignored dir matched by its trailing-slash name', () => {
+  const a = idx.auditIndex({ text: '## Index\n\n| File | Answers |\n|---|---|\n| [d/](d/README.md) | x |\n',
+    entries: ['d/'], exists: () => true, ignored: new Set(['d/']), isPublic: true });
+  assert.deepStrictEqual(a.linkedIgnored, ['d/']);
+});
+
+// --- 1.2.0: git-aware index
+function gitRepo() {
+  const g = tmp(); execFileSync('git', ['init', '-q'], { cwd: g, stdio: 'ignore' }); scaffold(g); return g;
+}
+d = gitRepo();
+fs.writeFileSync(K(d, '.gitignore'), 'local.md\ndrafts/\nforced.md\n');
+put(K(d, 'local.md')); put(K(d, 'drafts', 'a.md')); put(K(d, 'shared.md')); put(K(d, 'forced.md'));
+execFileSync('git', ['add', '-f', '.ai/knowledge/forced.md'], { cwd: d, stdio: 'ignore' });
+r = index(d);
+check('git: index exits 0', () => assert.strictEqual(r.code, 0, r.err));
+check('git: gitignored file gets a name-only (local) row', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| `local.md` (local) | TODO: describe |'));
+});
+check('git: gitignored dir gets a name-only (local) row', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| `drafts/` (local) | TODO: describe |'));
+});
+check('git: untracked, not-ignored file gets a normal link', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| [shared.md](shared.md) | TODO: describe |'));
+});
+check('git: tracked file matching an ignore rule gets a normal link', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| [forced.md](forced.md) | TODO: describe |'));
+});
+check('git: no git-unavailable note inside a repo', () => assert.ok(!/git status unavailable/.test(r.err), r.err));
+check('git: (local) rows are not reported stale on a clone lacking the file', () => {
+  fs.rmSync(K(d, 'local.md'));
+  const r2 = index(d);
+  assert.ok(!/stale index entry: local\.md/.test(r2.err), r2.err);
+});
+check('git: an existing linked row to an ignored file is reported, not rewritten', () => {
+  put(K(d, 'local.md'));
+  const t = read(K(d, 'README.md')).replace('| `local.md` (local) | TODO: describe |', '| [local.md](local.md) | mine |');
+  fs.writeFileSync(K(d, 'README.md'), t);
+  const r2 = index(d);
+  assert.ok(/linked entry is gitignored: local\.md \(.*knowledge\/README\.md\) — make it a name-only \(local\) row/.test(r2.err), r2.err);
+  assert.strictEqual(read(K(d, 'README.md')), t);
+});
+
+d = tmp(); scaffold(d); put(K(d, 'x.md'));
+r = index(d);
+check('no git: links as before, one note', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| [x.md](x.md) | TODO: describe |'));
+  assert.strictEqual((r.err.match(/git status unavailable/g) || []).length, 1, r.err);
+});
+
+d = gitRepo();
+fs.writeFileSync(path.join(d, '.gitignore'), '.ai/\n');
+put(K(d, 'y.md'));
+r = index(d);
+check('whole .ai/ gitignored: rows stay links (index is never shared)', () => {
+  assert.ok(read(K(d, 'README.md')).includes('| [y.md](y.md) | TODO: describe |'), read(K(d, 'README.md')));
+});
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nINDEX OK');
 process.exit(failures ? 1 : 0);

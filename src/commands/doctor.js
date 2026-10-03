@@ -2,10 +2,13 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 const { findRoot } = require('../lib/root');
-const { FOLDERS, isCanonical } = require('../lib/structure');
+const { FOLDERS, OPTIONAL_FOLDERS, UNINDEXED, isCanonical } = require('../lib/structure');
 const { cascadeChain } = require('../lib/cascade');
+const idx = require('../lib/index-section');
+const markers = require('../lib/markers');
+const { FOLDER_BEGIN, FOLDER_END } = require('../lib/folder-readme');
+const { git, publicIgnored } = require('../lib/git-ignore');
 
 // Collect problems with the nearest .ai/ tree (read-only). Returns string[].
 function diagnose(aiDir) {
@@ -36,7 +39,9 @@ function diagnose(aiDir) {
   // 5. Stale non-canonical folders (sync-removable candidates).
   for (const name of fs.readdirSync(aiDir)) {
     const full = path.join(aiDir, name);
-    if (!fs.statSync(full).isDirectory()) continue;
+    let isDir = false;
+    try { isDir = fs.statSync(full).isDirectory(); } catch { /* dangling symlink */ }
+    if (!isDir) continue;
     if (name.startsWith('_') || isCanonical(name) || name === '.ai') continue;
     const entries = fs.readdirSync(full);
     if (entries.every((e) => e === 'README.md' || e === '.gitignore')) {
@@ -44,10 +49,69 @@ function diagnose(aiDir) {
     }
   }
 
-  // 6. A nested .ai/.ai/ — from running init/sync inside the layer (pre-1.1.2).
-  if (has('.ai')) problems.push('nested .ai/.ai/ found — likely from running init/sync inside .ai/; move its contents up and remove it');
+  // 6. A nested .ai/.ai — a dir from running init/sync inside the layer (pre-1.1.2), or a stray file.
+  if (has('.ai')) {
+    problems.push(fs.statSync(path.join(aiDir, '.ai')).isDirectory()
+      ? 'nested .ai/.ai/ found — likely from running init/sync inside .ai/; move its contents up and remove it'
+      : 'stray file .ai/.ai inside the layer — remove it');
+  }
 
   return problems;
+}
+
+// A layer holding nothing but plans/ — typically created by a relative
+// plansDirectory in user-level agent settings when a session starts in a
+// directory with no scaffold. Returns null, or { files } in plans/.
+function plansOnly(aiDir) {
+  let entries;
+  try { entries = fs.readdirSync(aiDir).filter((e) => e !== '.DS_Store'); } catch { return null; }
+  if (entries.length !== 1 || entries[0] !== 'plans') return null;
+  const plans = path.join(aiDir, 'plans');
+  try {
+    if (!fs.statSync(plans).isDirectory()) return null;
+    return { files: fs.readdirSync(plans).filter((e) => e !== '.DS_Store').length };
+  } catch { return null; }
+}
+
+function plansOnlyProblem(aiDir, info) {
+  const keep = info.files ? ` (plans/ has ${info.files} file(s) — keep them before removing)` : '';
+  return `plans-only .ai/ layer: ${aiDir} — likely created by a relative plansDirectory in user-level `
+    + `agent settings (e.g. ~/.claude/settings.json); remove it if empty, or scaffold it with 'dot-ai init'${keep}`;
+}
+
+// Index health for every indexed folder of the layer (README.md only; _README.md
+// is private and not audited). Problems break the committed-index promise;
+// warnings are unfinished work.
+function diagnoseIndexes(aiDir) {
+  const problems = [], warnings = [];
+  let unlisted = 0;
+  const names = [...FOLDERS, ...OPTIONAL_FOLDERS].filter((f) => !UNINDEXED.includes(f));
+  for (const f of names) {
+    const dir = path.join(aiDir, f);
+    const readme = path.join(dir, 'README.md');
+    if (!fs.existsSync(readme) || !fs.statSync(dir).isDirectory()) continue;
+    const rel = `${f}/README.md`;
+    const text = fs.readFileSync(readme, 'utf8').replace(/\r\n/g, '\n');
+    const scan = markers.scanBlocks(text, FOLDER_BEGIN, FOLDER_END);
+    if (scan.status === 'malformed') {
+      problems.push(`${rel} has an incomplete or malformed .ai-folder block — fix it by hand`);
+    }
+    if (scan.status === 'ok' && scan.blocks > 1) {
+      problems.push(`${scan.blocks} managed blocks in ${rel} — remove the extras by hand`);
+    }
+    const { pub } = idx.listEntries(dir);
+    const a = idx.auditIndex({
+      text, entries: pub, ignored: publicIgnored(dir, pub).ignored, isPublic: true,
+      exists: (top) => fs.existsSync(path.join(dir, top)),
+    });
+    for (const r of a.privateEntries) problems.push(`private entry in public index: ${r} (${rel})`);
+    for (const r of a.stale) problems.push(`stale index entry: ${r} (${rel})`);
+    for (const r of a.linkedIgnored) problems.push(`linked entry is gitignored: ${r} (${rel})`);
+    if (a.todo) warnings.push(`${a.todo} TODO: describe row(s) in ${rel}`);
+    for (const m of a.missing) warnings.push(`unlisted in index: ${f}/${m}`);
+    unlisted += a.missing.length;
+  }
+  return { problems, warnings, unlisted };
 }
 
 // opts: { cwd }
@@ -56,35 +120,38 @@ function run(opts) {
   const aiDir = findRoot(cwd);
   if (!aiDir) { console.error('doctor: no .ai/ directory found at or above the current directory.'); process.exit(2); }
 
-  const problems = diagnose(aiDir);
-  const ignore = diagnoseIgnore(aiDir);
-  problems.push(...ignore.problems);
-  console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   const chain = cascadeChain(cwd);
+  const layers = chain.includes(aiDir) ? chain : [aiDir, ...chain];
+  const strays = layers.map((ai) => ({ ai, info: plansOnly(ai) })).filter((s) => s.info);
+  const nearestStray = strays.some((s) => s.ai === aiDir);
+  const problems = nearestStray ? [] : diagnose(aiDir);
+  const ignore = nearestStray ? { problems: [], notes: [] } : diagnoseIgnore(aiDir);
+  const indexes = nearestStray ? { problems: [], warnings: [], unlisted: 0 } : diagnoseIndexes(aiDir);
+  problems.push(...ignore.problems, ...indexes.problems);
+  problems.push(...strays.map((s) => plansOnlyProblem(s.ai, s.info)));
+  console.error(`dot-ai doctor — ${path.relative(cwd, aiDir) || '.ai'}`);
   if (chain.length > 1) {
     console.error('  cascade (broad → specific):');
     [...chain].reverse().forEach((ai) => console.error(`    - ${ai}`));
   }
   for (const n of ignore.notes) console.error(`  · ${n}`);
+  for (const w of indexes.warnings) console.error(`  · ${w}`);
   if (problems.length === 0) {
     console.error('  ✓ no problems found');
+    if (indexes.unlisted) console.error("  Run 'dot-ai index' to add missing rows.");
     process.exit(0);
   }
   for (const p of problems) console.error(`  ✗ ${p}`);
+  if (problems.length === strays.length) { // plans-only layers only: sync can't help
+    console.error(`\n${problems.length} problem(s) found.`);
+    process.exit(1);
+  }
   const hint = ignore.problems.length
     ? "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule; ignore problems above need a git fix (e.g. 'git rm --cached <path>')."
     : "Run 'dot-ai sync' to restore folders, READMEs, and the .gitignore rule.";
   console.error(`\n${problems.length} problem(s) found. ${hint}`);
+  if (indexes.unlisted) console.error("  Run 'dot-ai index' to add missing rows.");
   process.exit(1);
-}
-
-// Run git, tolerating its absence. status null means git could not be executed.
-function git(args, cwd) {
-  // C locale: git translates its messages, and diagnoseIgnore matches one.
-  const r = spawnSync('git', args,
-    { cwd, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', LANGUAGE: 'C' } });
-  if (r.error) return { ok: false, status: null, out: '', err: '' };
-  return { ok: true, status: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
 }
 
 // Verify the _* local-prefix rule is actually IN FORCE, rather than merely
@@ -153,4 +220,4 @@ function diagnoseIgnore(aiDir) {
   return { problems, notes };
 }
 
-module.exports = { run, diagnose, diagnoseIgnore };
+module.exports = { run, plansOnly, diagnose, diagnoseIgnore, diagnoseIndexes };

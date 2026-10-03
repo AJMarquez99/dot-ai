@@ -432,34 +432,77 @@ end_cr_space_case() {
   pass "$name (end cr space)"
 }
 
-# (#1) A UTF-8 BOM immediately before the BEGIN marker makes the line not a
-# real marker line — macOS BWK awk collates in a UTF-8 locale, so without
-# LC_ALL=C the BOM can be treated as insignificant and the line falsely
-# matches; both runners must agree it's malformed: warn, leave the file
-# untouched, exit 0.
+# A UTF-8 BOM on record 1 before BEGIN is tolerated (stripped for comparison
+# only) and preserved as the file's first bytes after the block is refreshed.
 bom_marker_case() {
   name="$1"; shift; runner="$1"; shift
   work=$(mktemp -d); cd "$work"
   printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > CLAUDE.md
-  cp CLAUDE.md before.md
   out=$($runner --claude --no-plans 2>&1) || fail "$name: BOM-marker run exited non-zero"
-  cmp -s CLAUDE.md before.md || fail "$name: BOM-marker file was modified"
-  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no warning for BOM-marker"
+  printf '%s\n' "$out" | grep -qF 'updated block in' || fail "$name: BOM-prefixed block not refreshed"
+  grep -qF 'BODY' CLAUDE.md && fail "$name: stale body survived"
+  [ "$(head -c3 CLAUDE.md | od -An -tx1 | tr -d ' \n')" = "efbbbf" ] || fail "$name: BOM not preserved"
+  [ "$(grep -cF '<!-- BEGIN .ai-convention -->' CLAUDE.md)" -eq 1 ] || fail "$name: expected one block"
   cd /; rm -rf "$work"
   pass "$name (bom marker)"
 }
 
-# Cross-runner byte parity for the BOM-adjacent-marker case (#1): identical
-# BOM-prefixed input must produce byte-identical (untouched) output in both.
+# A BOM before a marker on any later line is still not a marker: malformed.
+bom_later_line_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '# t\n<!-- BEGIN .ai-convention -->\nBODY\n\357\273\277<!-- END .ai-convention -->\n' > CLAUDE.md
+  cp CLAUDE.md before.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: run exited non-zero"
+  cmp -s CLAUDE.md before.md || fail "$name: file was modified"
+  printf '%s\n' "$out" | grep -qE 'warning:.*incomplete or malformed convention block' || fail "$name: no malformed warning"
+  cd /; rm -rf "$work"
+  pass "$name (bom later line)"
+}
+
 bom_marker_parity_case() {
   a=$(mktemp -d); b=$(mktemp -d)
-  printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > "$a/CLAUDE.md"
-  printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > "$b/CLAUDE.md"
+  for f in "$a/CLAUDE.md" "$b/CLAUDE.md"; do
+    printf '\357\273\277<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\nAFTER\n' > "$f"
+  done
   ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
   ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
   diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "BOM marker parity: install.sh vs cli.js differ"
+  # Non-marker BOM first line must also come out identical.
+  for f in "$a/CLAUDE.md" "$b/CLAUDE.md"; do
+    printf '\357\273\277# t\n<!-- BEGIN .ai-convention -->\nBODY\n<!-- END .ai-convention -->\n' > "$f"
+  done
+  ( cd "$a" && sh "$REPO_ROOT/install.sh" --claude --no-plans >/dev/null 2>&1 )
+  ( cd "$b" && node "$REPO_ROOT/bin/cli.js" --claude --no-plans >/dev/null 2>&1 )
+  diff "$a/CLAUDE.md" "$b/CLAUDE.md" || fail "BOM title parity: install.sh vs cli.js differ"
+  [ "$(head -c3 "$a/CLAUDE.md" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ] || fail "BOM title: BOM lost"
   rm -rf "$a" "$b"
   pass "BOM marker parity"
+}
+
+# Two well-formed blocks: both refreshed AND a duplicate warning, same text.
+dup_block_warning_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  printf '<!-- BEGIN .ai-convention -->\nA\n<!-- END .ai-convention -->\nMID\n<!-- BEGIN .ai-convention -->\nB\n<!-- END .ai-convention -->\n' > CLAUDE.md
+  out=$($runner --claude --no-plans 2>&1) || fail "$name: run exited non-zero"
+  printf '%s\n' "$out" | grep -qF 'warning: 2 convention blocks in CLAUDE.md — remove the extras by hand' \
+    || fail "$name: no duplicate-block warning; got: $out"
+  out=$($runner --claude --no-plans 2>&1)
+  printf '%s\n' "$out" | grep -qF 'warning: 2 convention blocks' || fail "$name: warning missing on unchanged run"
+  printf '%s\n' "$out" | grep -qF 'unchanged: CLAUDE.md' || fail "$name: second run not unchanged"
+  cd /; rm -rf "$work"
+  pass "$name (duplicate warning)"
+}
+
+# A single block never warns.
+single_block_no_warning_case() {
+  name="$1"; shift; runner="$1"; shift
+  work=$(mktemp -d); cd "$work"
+  out=$($runner --claude --no-plans 2>&1; $runner --claude --no-plans 2>&1)
+  printf '%s\n' "$out" | grep -qF 'convention blocks in' && fail "$name: spurious duplicate warning"
+  cd /; rm -rf "$work"
+  pass "$name (single block, no warning)"
 }
 
 end_cr_space_parity_case() {
@@ -606,6 +649,12 @@ end_cr_space_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 end_cr_space_parity_case
 bom_marker_case "install.sh" "sh $REPO_ROOT/install.sh"
 bom_marker_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+bom_later_line_case "install.sh" "sh $REPO_ROOT/install.sh"
+bom_later_line_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+dup_block_warning_case "install.sh" "sh $REPO_ROOT/install.sh"
+dup_block_warning_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
+single_block_no_warning_case "install.sh" "sh $REPO_ROOT/install.sh"
+single_block_no_warning_case "cli.js"     "node $REPO_ROOT/bin/cli.js"
 bom_marker_parity_case
 inject_newline_parity_case
 inside_ai_case "install.sh" "sh $REPO_ROOT/install.sh"
